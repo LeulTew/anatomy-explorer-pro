@@ -29,8 +29,10 @@ interface AppState {
     isCameraActive: boolean;
     isModelLoaded: boolean;
     isInfoPanelOpen: boolean;
+    isVerified: boolean;
 
     updateHands: (left: Hand | null, right: Hand | null) => void;
+    setVerified: (verified: boolean) => void;
     setGesture: (gesture: AppState['gesture']) => void;
     setRotationDelta: (delta: { x: number; y: number }) => void;
     setZoomFactor: (factor: number) => void;
@@ -60,8 +62,10 @@ export const useStore = create<AppState>((set) => ({
     isCameraActive: true,
     isModelLoaded: false,
     isInfoPanelOpen: false,
+    isVerified: false,
 
     updateHands: (left, right) => set({ leftHand: left, rightHand: right }),
+    setVerified: (verified) => set({ isVerified: verified }),
     setGesture: (gesture) => set({ gesture }),
     setRotationDelta: (delta) => set({ rotationDelta: delta }),
     setZoomFactor: (zoomFactor) => set({ zoomFactor }),
@@ -73,5 +77,5 @@ export const useStore = create<AppState>((set) => ({
 
     setCameraActive: (isCameraActive) => set({ isCameraActive }),
     setModelLoaded: (isModelLoaded) => set({ isModelLoaded }),
-    setInfoPanelOpen: (isInfoPanelOpen) => set({ isInfoPanelOpen })
+    setInfoPanelOpen: (isInfoPanelOpen) => set({ isInfoPanelOpen }),
 }));

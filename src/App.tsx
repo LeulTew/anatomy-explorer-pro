@@ -3,7 +3,8 @@ import Scene3D from './components/Scene3D';
 import HandController from './components/HandController';
 import { useStore } from './store/useStore';
 import { GestureRecognizer } from './logic/GestureRecognizer';
-import { ANATOMY_DATA, MOVEMENT_TYPES, type MuscleGroup } from './data/anatomy';
+import { ANATOMY_DATA, type MuscleGroup } from './data/anatomy';
+import OverlayUI from './components/UI/OverlayUI';
 
 // --- Gesture Logic ---
 const GestureManager: React.FC = () => {
@@ -109,8 +110,6 @@ const App: React.FC = () => {
     const {
         isModelLoaded, gesture, isCameraActive, setCameraActive,
         activeMuscleGroup, setActiveMuscleGroup,
-        currentMovement, setCurrentMovement,
-        movementIntensity, setMovementIntensity,
         showSkeleton, setShowSkeleton
     } = useStore();
 
@@ -132,6 +131,7 @@ const App: React.FC = () => {
                     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 </div>
             )}
+
 
             {/* Main UI */}
             <div className="animate-slide-up" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', padding: '30px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -202,41 +202,6 @@ const App: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Movement Controls */}
-                    <div className="glass" style={{ padding: '20px', borderRadius: '16px', width: 250 }}>
-                        <div style={{ fontSize: '0.6rem', opacity: 0.5, fontWeight: 700, marginBottom: 10, letterSpacing: '1px' }}>DYNAMICS</div>
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-                            {MOVEMENT_TYPES.map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => setCurrentMovement(type)}
-                                    style={{
-                                        flex: '1 1 40%',
-                                        padding: '8px',
-                                        fontSize: '0.7rem',
-                                        background: currentMovement === type ? '#00f7ff' : 'rgba(255,255,255,0.05)',
-                                        color: currentMovement === type ? '#000' : '#fff',
-                                        border: 'none',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {type.toUpperCase()}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div style={{ fontSize: '0.6rem', opacity: 0.5, fontWeight: 700, marginBottom: 8, letterSpacing: '1px' }}>INTENSITY: {(movementIntensity * 100).toFixed(0)}%</div>
-                        <input
-                            type="range"
-                            min="0" max="1" step="0.05"
-                            value={movementIntensity}
-                            onChange={(e) => setMovementIntensity(parseFloat(e.target.value))}
-                            style={{ width: '100%', accentColor: '#00f7ff' }}
-                        />
-                    </div>
-
                     {/* Toggles */}
                     <div style={{ display: 'flex', gap: 10 }}>
                         <button
@@ -254,6 +219,8 @@ const App: React.FC = () => {
                     CONFIDENTIAL // INTERNAL USE ONLY
                 </footer>
             </div>
+
+            <OverlayUI />
 
             <style>{`
                 .btn-premium {
