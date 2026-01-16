@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import Scene3D from './components/Scene3D';
 import HandController from './components/HandController';
 import { useStore } from './store/useStore';
 import { GestureRecognizer } from './logic/GestureRecognizer';
-import { ANATOMY_DATA, type MuscleGroup } from './data/anatomy';
+// ANATOMY_DATA removed as unused
 import OverlayUI from './components/UI/OverlayUI';
 
 // --- Gesture Logic ---
@@ -67,53 +67,15 @@ const GestureManager: React.FC = () => {
     return null;
 };
 
-// --- Info Panel ---
-const InfoPanel: React.FC = () => {
-    const isOpen = useStore(s => s.isInfoPanelOpen);
-    const setOpen = useStore(s => s.setInfoPanelOpen);
-    const activeMuscle = useStore(s => s.activeMuscleGroup);
+// --- Info Panel removed ---
 
-    if (!activeMuscle) return null;
-
-    const info = ANATOMY_DATA[activeMuscle];
-
-    return (
-        <div className="glass" style={{ pointerEvents: 'auto', marginTop: 15, borderRadius: '16px', overflow: 'hidden', maxWidth: '320px', borderLeft: '4px solid #00f7ff' }}>
-            <div
-                onClick={() => setOpen(!isOpen)}
-                style={{ padding: '12px 20px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-                <div style={{ fontSize: '0.9rem', fontWeight: 700, letterSpacing: '1px' }}>{info.name.toUpperCase()}</div>
-                <div style={{ transition: 'transform 0.2s', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', fontSize: '0.7rem' }}>▼</div>
-            </div>
-
-            {isOpen && (
-                <div style={{ padding: '0 20px 20px 20px' }}>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.8, marginBottom: 12, lineHeight: 1.4 }}>{info.description}</div>
-
-                    <div style={{ fontSize: '0.7rem', opacity: 0.5, fontWeight: 700, marginBottom: 4 }}>ACTION</div>
-                    <div style={{ fontSize: '0.8rem', marginBottom: 12 }}>{info.action}</div>
-
-                    <div style={{ fontSize: '0.7rem', opacity: 0.5, fontWeight: 700, marginBottom: 4 }}>EXERCISES</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                        {info.exercises.map(ex => (
-                            <span key={ex} style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem' }}>{ex}</span>
-                        ))}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 const App: React.FC = () => {
-    const {
-        isModelLoaded, gesture, isCameraActive, setCameraActive,
-        activeMuscleGroup, setActiveMuscleGroup,
-        showSkeleton, setShowSkeleton
-    } = useStore();
-
-    const [muscleMenuOpen, setMuscleMenuOpen] = useState(false);
+    // Only subscribe to what is needed for this component's top-level logic (e.g. loading screen)
+    const isModelLoaded = useStore(state => state.isModelLoaded);
+    const isCameraActive = useStore(state => state.isCameraActive);
+    const setCameraActive = useStore(state => state.setCameraActive);
+    const gesture = useStore(state => state.gesture);
 
     return (
         <>
@@ -131,7 +93,6 @@ const App: React.FC = () => {
                     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                 </div>
             )}
-
 
             {/* Main UI */}
             <div className="animate-slide-up" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', padding: '30px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -161,58 +122,12 @@ const App: React.FC = () => {
                             </button>
                         </div>
 
-                        <InfoPanel />
+                        {/* InfoPanel removed as requested (no selector) */}
                     </div>
                 </header>
 
-                {/* Main Controls - Left Side */}
                 <main style={{ pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 20, alignItems: 'flex-start' }}>
-
-                    {/* Muscle Selector */}
-                    <div style={{ position: 'relative' }}>
-                        <button
-                            className="btn-premium"
-                            style={{ minWidth: 200, justifyContent: 'space-between', display: 'flex', alignItems: 'center' }}
-                            onClick={() => setMuscleMenuOpen(!muscleMenuOpen)}
-                        >
-                            <span>{activeMuscleGroup ? activeMuscleGroup.toUpperCase() : 'SELECT REGION'}</span>
-                            <span>▼</span>
-                        </button>
-
-                        {muscleMenuOpen && (
-                            <div className="glass-vibrant" style={{ position: 'absolute', top: '100%', left: 0, marginTop: 10, width: '100%', borderRadius: '12px', overflow: 'hidden' }}>
-                                <div
-                                    className="dropdown-item"
-                                    style={{ padding: '12px', fontSize: '0.8rem', cursor: 'pointer', opacity: 0.8 }}
-                                    onClick={() => { setActiveMuscleGroup(null); setMuscleMenuOpen(false); }}
-                                >
-                                    CLEAR SELECTION
-                                </div>
-                                {Object.keys(ANATOMY_DATA).map(key => (
-                                    <div
-                                        key={key}
-                                        className="dropdown-item"
-                                        style={{ padding: '12px', fontSize: '0.8rem', cursor: 'pointer', background: activeMuscleGroup === key ? 'rgba(0,247,255,0.1)' : 'transparent' }}
-                                        onClick={() => { setActiveMuscleGroup(key as MuscleGroup); setMuscleMenuOpen(false); useStore.getState().setInfoPanelOpen(true); }}
-                                    >
-                                        {(key as string).toUpperCase()}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Toggles */}
-                    <div style={{ display: 'flex', gap: 10 }}>
-                        <button
-                            onClick={() => setShowSkeleton(!showSkeleton)}
-                            className="btn-premium"
-                            style={{ background: showSkeleton ? 'rgba(0,247,255,0.2)' : 'rgba(0,0,0,0.5)' }}
-                        >
-                            {showSkeleton ? 'HIDE SKELETON' : 'SHOW SKELETON'}
-                        </button>
-                    </div>
-
+                    {/* Muscle Selector and Toggles removed */}
                 </main>
 
                 <footer style={{ textAlign: 'right', opacity: 0.3, fontSize: '0.6rem' }}>

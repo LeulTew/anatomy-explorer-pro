@@ -138,50 +138,22 @@ const AnatomyModel: React.FC = () => {
     const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
     const { nodes } = useGraph(clone);
 
-    const { activeMuscleGroup, showSkeleton } = useStore(state => ({
-        activeMuscleGroup: state.activeMuscleGroup,
-        showSkeleton: state.showSkeleton
-    }));
+    // No extra state needed for now
 
     // Effect to apply material highlights based on selection
+    // Effect to apply material highlights - SIMPLIFIED to just shadows
     useEffect(() => {
         clone.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
-
-                // Basic material cleanup if needed (ensure PBR)
                 if (child.material) {
                     child.material.envMapIntensity = 1;
                     child.material.roughness = 0.6;
-
-                    // Highlight logic
-                    if (activeMuscleGroup) {
-                        // Very rough matching logic - assumes mesh names contain muscle names
-                        // user would name meshes "Pectoralis_Major", "Bicep_L", etc.
-                        if (child.name.toLowerCase().includes(activeMuscleGroup.toLowerCase())) {
-                            child.material.emissive = new THREE.Color('#0044aa');
-                            child.material.emissiveIntensity = 0.5;
-                        } else {
-                            child.material.emissive = new THREE.Color('black');
-                            child.material.emissiveIntensity = 0;
-                        }
-                    }
-
-                    // X-Ray / Skeleton mode
-                    if (showSkeleton) {
-                        child.material.wireframe = true;
-                        child.material.opacity = 0.3;
-                        child.material.transparent = true;
-                    } else {
-                        child.material.wireframe = false;
-                        child.material.opacity = 1.0;
-                        child.material.transparent = false;
-                    }
                 }
             }
         });
-    }, [clone, activeMuscleGroup, showSkeleton]);
+    }, [clone]);
 
     return (
         <group ref={group} dispose={null} position={[0, -1, 0]}>

@@ -47,11 +47,11 @@ const SubscriptionOverlay: React.FC = () => {
 };
 
 const ControlPanel: React.FC = () => {
-    const {
-        currentMovement, setCurrentMovement,
-        movementIntensity, setMovementIntensity,
-        setRotationDelta
-    } = useStore();
+    const currentMovement = useStore(state => state.currentMovement);
+    const setCurrentMovement = useStore(state => state.setCurrentMovement);
+    const movementIntensity = useStore(state => state.movementIntensity);
+    const setMovementIntensity = useStore(state => state.setMovementIntensity);
+    const setRotationDelta = useStore(state => state.setRotationDelta);
 
     return (
         <div className="glass" style={{
