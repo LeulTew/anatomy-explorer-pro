@@ -265,12 +265,40 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
                 const mult = (!buttLRef.current) ? 1.5 : 1.0;
                 hipsRef.current.rotation.z = base.z - leftChestOffset.x * 0.6 * mult; // Negative for right side
                 hipsRef.current.rotation.x = base.x + leftChestOffset.y * 0.4 * mult;
+
+                // COUNTER-ROTATION: Isolate movement by rotating chest and legs opposite direction
+                if (!buttLRef.current) {
+                    if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
+                        const cBase = initialRotations.current[chestRef.current.uuid];
+                        chestRef.current.rotation.z = cBase.z + leftChestOffset.x * 0.5 * mult; // Counter
+                        chestRef.current.rotation.x = cBase.x - leftChestOffset.y * 0.3 * mult; // Counter
+                    }
+                    // Keep leg mostly still (counter the hip tilt)
+                    if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+                        const lBase = initialRotations.current[upperLegLRef.current.uuid];
+                        upperLegLRef.current.rotation.z = lBase.z + leftChestOffset.x * 0.4 * mult;
+                    }
+                }
             } else if (isRightInteracting) {
                 // Right hand → tilt model's LEFT side (viewer's right)
                 // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
                 const mult = (!buttRRef.current) ? 1.5 : 1.0;
                 hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6 * mult; // Positive for left side
                 hipsRef.current.rotation.x = base.x + rightChestOffset.y * 0.4 * mult;
+
+                // COUNTER-ROTATION
+                if (!buttRRef.current) {
+                    if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
+                        const cBase = initialRotations.current[chestRef.current.uuid];
+                        chestRef.current.rotation.z = cBase.z - rightChestOffset.x * 0.5 * mult; // Counter
+                        chestRef.current.rotation.x = cBase.x - rightChestOffset.y * 0.3 * mult; // Counter
+                    }
+                    // Keep leg mostly still
+                    if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+                        const lBase = initialRotations.current[upperLegRRef.current.uuid];
+                        upperLegRRef.current.rotation.z = lBase.z - rightChestOffset.x * 0.4 * mult;
+                    }
+                }
             } else {
                 hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
                 hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
@@ -365,8 +393,14 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
         groupRef.current.scale.setScalar(THREE.MathUtils.lerp(groupRef.current.scale.x, targetScale, 0.1));
     });
 
-    // Base mesh is too high, lower it specifically
-    const yOffset = modelId === 'base_mesh' ? -1.35 : -1.0;
+    // Lower specific models to center hips at (0,0,0)
+    // Jeny is perfect at -1.0. Others need to be lower as their origin seems to be at feet/lower.
+    let yOffset = -1.0;
+    if (modelId === 'base_mesh') yOffset = -2.5; // Drastic lower as user report feet at center
+    else if (modelId === 'michelle' || modelId === 'christmas') yOffset = -1.6;
+
+    // Use default -1.0 for Jeny
+
 
     return (
         <group ref={groupRef} dispose={null} position={[0, yOffset, 0]}>
