@@ -37,22 +37,22 @@ export const AVAILABLE_MODELS = [
         id: 'seraphina',
         name: 'Seraphina',
         path: '/models/seraphina.glb',
-        // Lowered more for zoom centering (-1.5 -> -2.0)
-        config: { position: [0, -2.0, 0], scale: 0.015, rotation: [0, 0, 0] }
+        // Lowered more for deep centering (-2.0 -> -2.5)
+        config: { position: [0, -2.5, 0], scale: 0.015, rotation: [0, 0, 0] }
     },
     {
         id: 'isabella',
         name: 'Isabella',
         path: '/models/isabella.glb',
-        // Lowered more for zoom centering (-2.5 -> -3.5)
-        config: { position: [0, -3.5, 0], scale: 2.5, rotation: [Math.PI, 0, 0], invertRotation: true }
+        // Lowered significantly for deep centering (-3.5 -> -4.5)
+        config: { position: [0, -4.5, 0], scale: 2.5, rotation: [Math.PI, 0, 0], invertRotation: true }
     },
     {
         id: 'amara',
         name: 'Amara',
         path: '/models/amara.glb',
-        // Lowered more for zoom centering (-2.2 -> -2.7)
-        config: { position: [0, -2.7, 0], scale: 1.0, rotation: [0, 0, 0] }
+        // Lowered more for centering (-2.7 -> -3.0)
+        config: { position: [0, -3.0, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
 ];
 
@@ -446,10 +446,14 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
                 child.castShadow = true;
                 child.receiveShadow = true;
 
-                // Texture fix: Only set intensity if envMap exists and not overriding core look
-                // Removing hardcoded roughness=0.6 which might wash out skin tones
+                // Texture fix: Force white base color and disable metalness to show actual skin textures
                 if (child.material) {
-                    child.material.envMapIntensity = 0.5; // Lower default to avoid blowout
+                    const mat = child.material as THREE.MeshStandardMaterial;
+                    if (mat.color) mat.color.set(0xffffff); // Ensure base color is white (un-tinted)
+                    mat.metalness = 0; // Disable metalness to prevent dark/shiny washout
+                    mat.roughness = 0.5; // Natural skin roughness
+                    mat.envMapIntensity = 0.5;
+                    mat.needsUpdate = true;
                 }
             }
         });
