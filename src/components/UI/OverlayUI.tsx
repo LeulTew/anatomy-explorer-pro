@@ -95,7 +95,7 @@ const StudioControls: React.FC = () => {
 
     return (
         <div className="glass-dark animate-slide-up studio-controls" style={{
-            position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)',
+            position: 'absolute', bottom: 30, left: 30,
             padding: '12px 25px', borderRadius: '100px', display: 'flex', gap: 20, alignItems: 'center',
             zIndex: 100, border: '1px solid rgba(255,255,255,0.1)',
             boxShadow: '0 10px 30px rgba(0,0,0,0.3)',

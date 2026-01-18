@@ -239,15 +239,19 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         const leftHipValue = leftHipSpring.current.update(deltaTime);
         const rightHipValue = rightHipSpring.current.update(deltaTime);
 
-        // Apply to hip/butt bones
+        // Apply to hip/butt bones - MAIN TWERK EFFECT
         if (hipsRef.current && initialRotations.current[hipsRef.current.uuid] && isBackView && isInteracting) {
             const base = initialRotations.current[hipsRef.current.uuid];
-            hipsRef.current.rotation.z = base.z + interactOffset.x * 0.3;
-            hipsRef.current.rotation.y = base.y + interactOffset.x * 0.1;
+            // Strong side-to-side tilt and twist for twerk effect
+            hipsRef.current.rotation.z = base.z + interactOffset.x * 0.8;
+            hipsRef.current.rotation.y = base.y + interactOffset.x * 0.3;
+            // Also add forward/back tilt based on Y
+            hipsRef.current.rotation.x = base.x + interactOffset.y * 0.5;
         } else if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
             const base = initialRotations.current[hipsRef.current.uuid];
             hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
             hipsRef.current.rotation.y = THREE.MathUtils.lerp(hipsRef.current.rotation.y, base.y, 0.1);
+            hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
         }
 
         // Butt bones jiggle
