@@ -151,6 +151,8 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
     // Physics Springs
     const leftChestSpring = useRef(new SpringSolver(0, 120, 6));
     const rightChestSpring = useRef(new SpringSolver(0, 120, 6));
+    const armLSpring = useRef(new SpringSolver(0, 80, 4));
+    const armRSpring = useRef(new SpringSolver(0, 80, 4));
     const leftHipSpring = useRef(new SpringSolver(0, 100, 5));
     const rightHipSpring = useRef(new SpringSolver(0, 100, 5));
 
@@ -204,13 +206,14 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             if (ref.current) {
                 initialRotations.current[ref.current.uuid] = ref.current.rotation.clone();
 
-                // --- Apply A-Pose (Arms down) ---
+                // --- Default Pose Init ---
+                // We'll calculate the actual "loose" rotation in useFrame
+                // But we set a starting bias here
                 if (ref === armLRef && ref.current) {
-                    // For Isabella, we might need to flip these if she's rotated 180
-                    ref.current.rotation.z = modelId === 'isabella' ? Math.PI / 3 : -Math.PI / 3;
+                    ref.current.rotation.z = modelId === 'isabella' ? Math.PI / 4 : -Math.PI / 4;
                 }
                 if (ref === armRRef && ref.current) {
-                    ref.current.rotation.z = modelId === 'isabella' ? -Math.PI / 3 : Math.PI / 3;
+                    ref.current.rotation.z = modelId === 'isabella' ? -Math.PI / 4 : Math.PI / 4;
                 }
 
                 // --- Apply Bone Offsets from Config ---
@@ -283,6 +286,23 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
 
         const leftChestValue = leftChestSpring.current.update(deltaTime);
         const rightChestValue = rightChestSpring.current.update(deltaTime);
+
+        // === LOOSE ARM PHYSICS ===
+        const armDangleBase = Math.PI / 3.5; // ~50 degrees
+        const armSway = Math.sin(time * 0.8) * 0.05 * movementIntensity;
+
+        armLSpring.current.target = armDangleBase + armSway;
+        armRSpring.current.target = armDangleBase + armSway;
+
+        const armLValue = armLSpring.current.update(deltaTime);
+        const armRValue = armRSpring.current.update(deltaTime);
+
+        if (armLRef.current) {
+            armLRef.current.rotation.z = modelId === 'isabella' ? armLValue : -armLValue;
+        }
+        if (armRRef.current) {
+            armRRef.current.rotation.z = modelId === 'isabella' ? -armRValue : armRValue;
+        }
 
         // Apply to breast bones (or chest as fallback)
         if (breastLRef.current && initialRotations.current[breastLRef.current.uuid]) {
