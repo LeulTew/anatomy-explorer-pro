@@ -15,6 +15,10 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -25,6 +29,7 @@ body {
 #root {
   width: 100vw;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile */
 }
 
 /* Glassmorphism Utilities */
@@ -34,6 +39,12 @@ body {
   -webkit-backdrop-filter: blur(24px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+}
+
+.glass-dark {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .glass-vibrant {
@@ -64,12 +75,21 @@ body {
   100% { box-shadow: 0 0 5px rgba(0, 247, 255, 0.2); }
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .animate-slide-up {
   animation: slideUp 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-float {
   animation: float 4s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
 }
 
 .btn-premium {
@@ -101,4 +121,213 @@ body {
   background: rgba(0, 247, 255, 0.15);
   border-color: rgba(0, 247, 255, 0.8);
   color: #00f7ff;
+}
+
+/* ============================================
+   RESPONSIVE STYLES
+   ============================================ */
+
+/* Mobile First - Base styles are for mobile */
+
+/* Small phones */
+@media (max-width: 380px) {
+  .app-header-title {
+    font-size: 1.2rem !important;
+  }
+  
+  .app-header-subtitle {
+    display: none !important;
+  }
+  
+  .status-bar {
+    padding: 6px 10px !important;
+    gap: 8px !important;
+  }
+  
+  .btn-premium {
+    padding: 8px 12px;
+    font-size: 0.65rem;
+  }
+  
+  .gesture-guide {
+    display: none !important;
+  }
+  
+  .studio-controls {
+    padding: 10px 15px !important;
+    gap: 15px !important;
+  }
+}
+
+/* Standard phones (portrait) */
+@media (max-width: 480px) {
+  .app-container {
+    padding: 15px !important;
+  }
+  
+  .app-header-title {
+    font-size: 1.5rem !important;
+  }
+  
+  .app-header-subtitle span:last-child {
+    display: none;
+  }
+  
+  .status-bar {
+    padding: 6px 12px !important;
+    gap: 10px !important;
+  }
+  
+  .gesture-indicator {
+    display: none !important;
+  }
+  
+  .btn-premium {
+    padding: 10px 14px;
+    font-size: 0.7rem;
+  }
+  
+  .gesture-guide {
+    top: 70px !important;
+    right: 10px !important;
+    left: 10px !important;
+    padding: 10px 15px !important;
+  }
+  
+  .gesture-guide h3 {
+    font-size: 0.7rem !important;
+  }
+  
+  .gesture-guide-item {
+    gap: 8px !important;
+  }
+  
+  .gesture-guide-icon {
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 0.6rem !important;
+  }
+  
+  .gesture-guide-text {
+    font-size: 0.8rem !important;
+  }
+  
+  .gesture-guide-desc {
+    font-size: 0.65rem !important;
+  }
+  
+  .studio-controls {
+    bottom: 20px !important;
+    padding: 12px 20px !important;
+    gap: 20px !important;
+    border-radius: 50px !important;
+  }
+  
+  .studio-controls-label {
+    font-size: 0.6rem !important;
+  }
+  
+  .studio-controls input[type="range"] {
+    width: 60px !important;
+  }
+  
+  .camera-preview {
+    width: 100px !important;
+    height: 75px !important;
+    bottom: 5px !important;
+    right: 5px !important;
+  }
+  
+  .age-gate-container {
+    padding: 20px !important;
+    max-width: 90vw !important;
+  }
+  
+  .age-gate-title {
+    font-size: 1.3rem !important;
+  }
+}
+
+/* Tablets and larger phones (landscape) */
+@media (min-width: 481px) and (max-width: 768px) {
+  .app-container {
+    padding: 20px !important;
+  }
+  
+  .app-header-title {
+    font-size: 2rem !important;
+  }
+  
+  .gesture-guide {
+    top: 90px !important;
+  }
+  
+  .camera-preview {
+    width: 130px !important;
+    height: 98px !important;
+  }
+}
+
+/* Desktop and larger tablets */
+@media (min-width: 769px) {
+  .app-container {
+    padding: 30px;
+  }
+  
+  .app-header-title {
+    font-size: 2.5rem;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .btn-premium {
+    min-height: 44px; /* iOS recommended touch target */
+    min-width: 44px;
+  }
+  
+  .btn-premium:hover {
+    transform: none;
+    box-shadow: none;
+  }
+  
+  .studio-controls button {
+    min-height: 44px;
+  }
+}
+
+/* Landscape phone specific */
+@media (max-height: 500px) and (orientation: landscape) {
+  .app-container {
+    padding: 10px 20px !important;
+  }
+  
+  .app-header-title {
+    font-size: 1.3rem !important;
+  }
+  
+  .gesture-guide {
+    top: 60px !important;
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+  }
+  
+  .studio-controls {
+    bottom: 10px !important;
+    padding: 8px 15px !important;
+  }
+  
+  .camera-preview {
+    width: 80px !important;
+    height: 60px !important;
+  }
+}
+
+/* High DPI / Retina displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .glass,
+  .glass-dark,
+  .glass-vibrant {
+    border-width: 0.5px;
+  }
 }

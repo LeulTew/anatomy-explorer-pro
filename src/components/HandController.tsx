@@ -10,17 +10,14 @@ let isInitializing = false;
 let initializationPromise: Promise<Hands | null> | null = null;
 
 async function getOrCreateHands(): Promise<Hands | null> {
-    // If already initialized, return existing instance
     if (globalHandsInstance) {
         return globalHandsInstance;
     }
 
-    // If initialization is in progress, wait for it
     if (isInitializing && initializationPromise) {
         return initializationPromise;
     }
 
-    // Start new initialization
     isInitializing = true;
     initializationPromise = (async () => {
         try {
@@ -28,7 +25,6 @@ async function getOrCreateHands(): Promise<Hands | null> {
                 locateFile: (file) => `/mediapipe/${file}`
             });
 
-            // Race initialization against a timeout to detect hangs
             const initPromise = hands.initialize();
             const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('MediaPipe initialization timed out (10s)')), 10000)
@@ -60,26 +56,21 @@ const HandController: React.FC = () => {
     const handsRef = useRef<Hands | null>(null);
     const cameraRef = useRef<Camera | null>(null);
 
-    // Use refs for callbacks to avoid stale closures
     const updateHandsRef = useRef(useStore.getState().updateHands);
     const setModelLoadedRef = useRef(useStore.getState().setModelLoaded);
 
-    // Refs for gesture tracking
     const prevLeftCentroid = useRef<{ x: number, y: number } | null>(null);
     const prevRightCentroid = useRef<{ x: number, y: number } | null>(null);
     const prevDist = useRef<number | null>(null);
     const lastUpdateRef = useRef<number>(0);
 
-    // Subscribe to store changes for camera state
     const isCameraActive = useStore(state => state.isCameraActive);
 
-    // Initialize MediaPipe
     useEffect(() => {
         let isActive = true;
         let loadingTimeout: ReturnType<typeof setTimeout>;
 
         const initializeMediaPipe = async () => {
-            // Long timeout - just a safety net
             loadingTimeout = setTimeout(() => {
                 if (isActive) {
                     useStore.getState().setModelLoaded(true);
@@ -98,7 +89,6 @@ const HandController: React.FC = () => {
 
                 if (!isActive) return;
 
-                // Setup callbacks
                 let hasReportedReady = false;
                 hands.onResults((results: Results) => {
                     if (!hasReportedReady) {
@@ -126,7 +116,6 @@ const HandController: React.FC = () => {
                         }
                     }
 
-                    // --- Gesture Processing Logic ---
                     const state = useStore.getState();
                     let currentGesture: GestureType = 'IDLE';
                     let newZoom = state.zoomFactor;
@@ -146,31 +135,25 @@ const HandController: React.FC = () => {
                             }
                         }
                         prevDist.current = dist;
-                        // Reset single-hand centroids when zooming
                         prevLeftCentroid.current = null;
                         prevRightCentroid.current = null;
                     } else {
                         prevDist.current = null;
                     }
 
-                    // PRIORITY 2: Single Hand Gestures (if not zooming)
+                    // PRIORITY 2: Single Hand Gestures
                     if (currentGesture === 'IDLE') {
-
-                        // RIGHT HAND ONLY
                         if (rightHand && !leftHand) {
                             const current = rightHand.centroid;
 
                             if (rightHand.isGrabbing) {
-                                // FIST = ROTATE
                                 currentGesture = 'ROTATE';
                                 if (prevRightCentroid.current) {
                                     const deltaX = current.x - prevRightCentroid.current.x;
                                     const deltaY = current.y - prevRightCentroid.current.y;
-                                    // Horizontal = full, Vertical = 20% (slight tilt)
                                     rotationDelta = { x: deltaX, y: deltaY * 0.2 };
                                 }
                             } else if (rightHand.isOpen) {
-                                // OPEN HAND = INTERACT RIGHT CHEST
                                 currentGesture = 'INTERACT_RIGHT';
                                 if (prevRightCentroid.current) {
                                     const deltaX = current.x - prevRightCentroid.current.x;
@@ -183,12 +166,10 @@ const HandController: React.FC = () => {
                             prevRightCentroid.current = null;
                         }
 
-                        // LEFT HAND ONLY
                         if (leftHand && !rightHand) {
                             const current = leftHand.centroid;
 
                             if (leftHand.isGrabbing) {
-                                // FIST = ROTATE (also works with left hand)
                                 currentGesture = 'ROTATE';
                                 if (prevLeftCentroid.current) {
                                     const deltaX = current.x - prevLeftCentroid.current.x;
@@ -196,7 +177,6 @@ const HandController: React.FC = () => {
                                     rotationDelta = { x: deltaX, y: deltaY * 0.2 };
                                 }
                             } else if (leftHand.isOpen) {
-                                // OPEN HAND = INTERACT LEFT CHEST
                                 currentGesture = 'INTERACT_LEFT';
                                 if (prevLeftCentroid.current) {
                                     const deltaX = current.x - prevLeftCentroid.current.x;
@@ -210,12 +190,10 @@ const HandController: React.FC = () => {
                         }
                     }
 
-                    // Throttle store updates (~30fps)
                     const now = performance.now();
                     if (now - lastUpdateRef.current > 32) {
                         lastUpdateRef.current = now;
 
-                        // Apply rotation delta to accumulator if rotating
                         if (currentGesture === 'ROTATE') {
                             useStore.getState().applyRotationDelta(rotationDelta);
                         }
@@ -234,7 +212,6 @@ const HandController: React.FC = () => {
 
                 handsRef.current = hands;
 
-                // Start Camera after hands is ready
                 if (videoRef.current) {
                     const camera = new Camera(videoRef.current, {
                         onFrame: async () => {
@@ -242,7 +219,7 @@ const HandController: React.FC = () => {
                                 try {
                                     await handsRef.current.send({ image: videoRef.current });
                                 } catch {
-                                    // Silently ignore send errors
+                                    // Silently ignore
                                 }
                             }
                         },
@@ -270,7 +247,6 @@ const HandController: React.FC = () => {
         };
     }, []);
 
-    // Handle camera start/stop separately from initialization
     useEffect(() => {
         if (!cameraRef.current) return;
 
@@ -282,18 +258,23 @@ const HandController: React.FC = () => {
         }
     }, [isCameraActive]);
 
-    // Keep refs up to date
     useEffect(() => {
         updateHandsRef.current = useStore.getState().updateHands;
         setModelLoadedRef.current = useStore.getState().setModelLoaded;
     });
 
     return (
-        <div style={{
-            position: 'fixed', bottom: 10, right: 10,
-            width: 160, height: 120, zIndex: 1000,
-            pointerEvents: 'none', opacity: isCameraActive ? 0.7 : 0.3,
-            borderRadius: 8, overflow: 'hidden',
+        <div className="camera-preview" style={{
+            position: 'fixed',
+            bottom: 10,
+            right: 10,
+            width: 'clamp(80px, 20vw, 160px)',
+            height: 'clamp(60px, 15vw, 120px)',
+            zIndex: 1000,
+            pointerEvents: 'none',
+            opacity: isCameraActive ? 0.7 : 0.3,
+            borderRadius: 8,
+            overflow: 'hidden',
             transition: 'opacity 0.3s'
         }}>
             <video

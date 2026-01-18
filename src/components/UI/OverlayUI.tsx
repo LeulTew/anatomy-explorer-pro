@@ -11,32 +11,32 @@ const SubscriptionOverlay: React.FC = () => {
         <div className="glass-dark" style={{
             position: 'fixed', inset: 0, zIndex: 3000,
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)'
+            background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)',
+            padding: 20
         }}>
-            <div style={{ maxWidth: 500, textAlign: 'center', padding: 40, border: '1px solid #333' }}>
-                <h1 style={{ color: '#00f7ff', fontSize: '2rem', marginBottom: 10, letterSpacing: '2px' }}>RESTRICTED ACCESS</h1>
-                <p style={{ color: '#aaa', marginBottom: 30 }}>
+            <div className="age-gate-container" style={{ maxWidth: 500, textAlign: 'center', padding: 30, border: '1px solid #333', borderRadius: 12 }}>
+                <h1 className="age-gate-title" style={{ color: '#00f7ff', fontSize: 'clamp(1.3rem, 5vw, 2rem)', marginBottom: 10, letterSpacing: '2px' }}>RESTRICTED ACCESS</h1>
+                <p style={{ color: '#aaa', marginBottom: 25, fontSize: 'clamp(0.85rem, 3vw, 1rem)' }}>
                     This application contains high-fidelity anatomical simulations intended for professional and educational use.
-                    Viewer discretion is advised.
                 </p>
 
-                <div style={{ background: 'rgba(255,0,0,0.1)', border: '1px solid rgba(255,0,0,0.3)', padding: 15, marginBottom: 30, borderRadius: 4 }}>
-                    <strong style={{ color: '#ff4444', display: 'block', marginBottom: 5 }}>AGE VERIFICATION REQUIRED</strong>
-                    <span style={{ fontSize: '0.9rem', color: '#ddd' }}>You must be 16 years or older to access this content.</span>
+                <div style={{ background: 'rgba(255,0,0,0.1)', border: '1px solid rgba(255,0,0,0.3)', padding: 12, marginBottom: 25, borderRadius: 4 }}>
+                    <strong style={{ color: '#ff4444', display: 'block', marginBottom: 5, fontSize: '0.9rem' }}>AGE VERIFICATION REQUIRED</strong>
+                    <span style={{ fontSize: '0.85rem', color: '#ddd' }}>You must be 16 years or older to access this content.</span>
                 </div>
 
-                <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: 15, justifyContent: 'center', flexWrap: 'wrap' }}>
                     <button
                         className="btn-premium"
-                        onClick={() => window.location.href = 'https://google.com'} // Exit
-                        style={{ border: '1px solid #444', background: 'transparent', opacity: 0.7 }}
+                        onClick={() => window.location.href = 'https://google.com'}
+                        style={{ border: '1px solid #444', background: 'transparent', opacity: 0.7, minWidth: 100 }}
                     >
                         EXIT
                     </button>
                     <button
                         className="btn-premium"
                         onClick={() => setVerified(true)}
-                        style={{ background: '#00f7ff', color: '#000', fontWeight: 'bold', border: 'none' }}
+                        style={{ background: '#00f7ff', color: '#000', fontWeight: 'bold', border: 'none', minWidth: 140 }}
                     >
                         I AM 16+ / ENTER
                     </button>
@@ -52,48 +52,49 @@ const StudioControls: React.FC = () => {
     const resetView = useStore(state => state.resetView);
 
     return (
-        <div className="glass-dark animate-slide-up" style={{
-            position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)',
-            padding: '15px 30px', borderRadius: '100px', display: 'flex', gap: 30, alignItems: 'center',
+        <div className="glass-dark animate-slide-up studio-controls" style={{
+            position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)',
+            padding: '12px 25px', borderRadius: '100px', display: 'flex', gap: 25, alignItems: 'center',
             zIndex: 100, border: '1px solid rgba(255,255,255,0.1)',
             boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)'
+            background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)',
+            maxWidth: 'calc(100vw - 40px)'
         }}>
 
             {/* Physics Intensity Control */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
-                <span style={{
-                    fontSize: '0.7rem', color: '#888', letterSpacing: '1.5px', fontWeight: 600,
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span className="studio-controls-label" style={{
+                    fontSize: '0.65rem', color: '#888', letterSpacing: '1.5px', fontWeight: 600,
                     textTransform: 'uppercase'
                 }}>
                     Physics
                 </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: '0.7rem', color: '#555' }}>Off</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: '0.6rem', color: '#555' }}>Off</span>
                     <input
                         type="range" min="0" max="1" step="0.1"
                         value={movementIntensity}
                         onChange={(e) => setMovementIntensity(parseFloat(e.target.value))}
-                        style={{ width: 100, accentColor: '#fff', height: 2, cursor: 'pointer' }}
+                        style={{ width: 80, accentColor: '#fff', height: 2, cursor: 'pointer' }}
                     />
-                    <span style={{ fontSize: '0.7rem', color: '#555' }}>Max</span>
+                    <span style={{ fontSize: '0.6rem', color: '#555' }}>Max</span>
                 </div>
             </div>
 
-            <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)' }} />
+            <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)' }} />
 
-            {/* Reset View Button - Now calls resetView() */}
+            {/* Reset View Button */}
             <button
                 onClick={() => resetView()}
                 style={{
                     background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#ccc',
-                    padding: '8px 16px', borderRadius: '100px', fontSize: '0.7rem', cursor: 'pointer',
-                    transition: 'all 0.2s', letterSpacing: '0.5px'
+                    padding: '8px 14px', borderRadius: '100px', fontSize: '0.65rem', cursor: 'pointer',
+                    transition: 'all 0.2s', letterSpacing: '0.5px', whiteSpace: 'nowrap'
                 }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = '#fff'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'}
             >
-                RESET VIEW
+                RESET
             </button>
         </div>
     );
