@@ -45,7 +45,15 @@ export const AVAILABLE_MODELS = [
         name: 'Isabella',
         path: '/models/isabella.glb',
         // Lowered more as requested (-3.5 -> -4.5)
-        config: { position: [0, -4.5, 0], scale: 2.5, rotation: [Math.PI, 0, 0], invertRotation: true }
+        config: {
+            position: [0, -4.5, 0],
+            scale: 2.5,
+            rotation: [Math.PI, 0, 0],
+            invertRotation: true,
+            boneOffsets: {
+                'breast': { x: 0.1, y: -0.2 } // Lower the pivot point for her breasts
+            }
+        }
     },
     {
         id: 'amara',
@@ -119,7 +127,7 @@ UpperLeg: ${boneNames.filter(b => b.toLowerCase().includes('upleg') || b.toLower
  * Front view: chest movement
  * Back view: glute movement
  */
-const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string }> = ({ nodes, modelName }) => {
+const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string, modelId: string }> = ({ nodes, modelName, modelId }) => {
     // Core bones
     const hipsRef = useRef<THREE.Bone | null>(null);
     const chestRef = useRef<THREE.Bone | null>(null);
@@ -133,6 +141,12 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
     const buttRRef = useRef<THREE.Bone | null>(null);
     const upperLegLRef = useRef<THREE.Bone | null>(null);
     const upperLegRRef = useRef<THREE.Bone | null>(null);
+
+    // Arm bones for A-Pose
+    const armLRef = useRef<THREE.Bone | null>(null);
+    const armRRef = useRef<THREE.Bone | null>(null);
+    const shoulderLRef = useRef<THREE.Bone | null>(null);
+    const shoulderRRef = useRef<THREE.Bone | null>(null);
 
     // Physics Springs
     const leftChestSpring = useRef(new SpringSolver(0, 120, 6));
@@ -179,13 +193,42 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         upperLegLRef.current = findBone(['l_thigh', 'leftupleg', 'thigh_l', 'upperleg_l', 'left_thigh'], ['twist', 'lower']);
         upperLegRRef.current = findBone(['r_thigh', 'rightupleg', 'thigh_r', 'upperleg_r', 'right_thigh'], ['twist', 'lower']);
 
+        // Arm bones for A-pose lowering
+        armLRef.current = findBone(['l_arm', 'leftarm', 'upperarm_l', 'l_upperarm'], ['lower', 'twist', 'forearm']);
+        armRRef.current = findBone(['r_arm', 'rightarm', 'upperarm_r', 'r_upperarm'], ['lower', 'twist', 'forearm']);
+        shoulderLRef.current = findBone(['l_shoulder', 'leftshoulder', 'clavicle_l', 'l_clavicle']);
+        shoulderRRef.current = findBone(['r_shoulder', 'rightshoulder', 'clavicle_r', 'r_clavicle']);
+
         // Store initial rotations
-        [hipsRef, chestRef, breastLRef, breastRRef, buttLRef, buttRRef, upperLegLRef, upperLegRRef].forEach(ref => {
+        [hipsRef, chestRef, breastLRef, breastRRef, buttLRef, buttRRef, upperLegLRef, upperLegRRef, armLRef, armRRef, shoulderLRef, shoulderRRef].forEach(ref => {
             if (ref.current) {
                 initialRotations.current[ref.current.uuid] = ref.current.rotation.clone();
+
+                // --- Apply A-Pose (Arms down) ---
+                if (ref === armLRef && ref.current) {
+                    // For Isabella, we might need to flip these if she's rotated 180
+                    ref.current.rotation.z = modelId === 'isabella' ? Math.PI / 3 : -Math.PI / 3;
+                }
+                if (ref === armRRef && ref.current) {
+                    ref.current.rotation.z = modelId === 'isabella' ? -Math.PI / 3 : Math.PI / 3;
+                }
+
+                // --- Apply Bone Offsets from Config ---
+                const config = AVAILABLE_MODELS.find(m => m.id === modelId)?.config;
+                if (config?.boneOffsets) {
+                    const boneName = ref.current.name.toLowerCase();
+                    Object.entries(config.boneOffsets).forEach(([pattern, offsetVal]) => {
+                        const offset = offsetVal as { x?: number; y?: number; z?: number };
+                        if (boneName.includes(pattern.toLowerCase())) {
+                            if (offset.x !== undefined) ref.current!.position.x += offset.x;
+                            if (offset.y !== undefined) ref.current!.position.y += offset.y;
+                            if (offset.z !== undefined) ref.current!.position.z += offset.z;
+                        }
+                    });
+                }
             }
         });
-    }, [nodes, modelName]);
+    }, [nodes, modelName, modelId]);
 
     const prevTime = useRef(0);
 
@@ -500,7 +543,7 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
     return (
         <group ref={groupRef} dispose={null} position={[pos[0], pos[1], pos[2]]}>
             <primitive object={clone} />
-            <RigController nodes={nodes} modelName={modelName} />
+            <RigController nodes={nodes} modelName={modelName} modelId={modelId} />
         </group>
     );
 };

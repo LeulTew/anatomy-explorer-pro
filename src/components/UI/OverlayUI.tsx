@@ -9,19 +9,14 @@ const SubscriptionOverlay: React.FC = () => {
     const setVerified = useStore(state => state.setVerified);
 
     return (
-        <div className="glass-dark" style={{
-            position: 'fixed', inset: 0, zIndex: 3000,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.95)', backdropFilter: 'blur(10px)',
-            padding: 20
-        }}>
-            <div className="age-gate-container" style={{ maxWidth: 500, textAlign: 'center', padding: 30, border: '1px solid #333', borderRadius: 12 }}>
-                <h1 className="age-gate-title" style={{ color: '#00f7ff', fontSize: 'clamp(1.3rem, 5vw, 2rem)', marginBottom: 10, letterSpacing: '2px' }}>RESTRICTED ACCESS</h1>
+        <div className="age-gate-overlay">
+            <div className="age-gate-container">
+                <h1 className="age-gate-title">RESTRICTED ACCESS</h1>
                 <p style={{ color: '#aaa', marginBottom: 25, fontSize: 'clamp(0.85rem, 3vw, 1rem)' }}>
                     This application contains high-fidelity anatomical simulations intended for professional and educational use.
                 </p>
 
-                <div style={{ background: 'rgba(255,0,0,0.1)', border: '1px solid rgba(255,0,0,0.3)', padding: 12, marginBottom: 25, borderRadius: 4 }}>
+                <div className="age-gate-warning">
                     <strong style={{ color: '#ff4444', display: 'block', marginBottom: 5, fontSize: '0.9rem' }}>AGE VERIFICATION REQUIRED</strong>
                     <span style={{ fontSize: '0.85rem', color: '#ddd' }}>You must be 16 years or older to access this content.</span>
                 </div>
@@ -66,17 +61,7 @@ const ModelSelector: React.FC = () => {
             <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                style={{
-                    background: 'rgba(0,0,0,0.6)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    fontSize: '0.7rem',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    minWidth: 120
-                }}
+                className="custom-select"
             >
                 {AVAILABLE_MODELS.map(model => (
                     <option key={model.id} value={model.id} style={{ background: '#111' }}>
@@ -94,21 +79,11 @@ const StudioControls: React.FC = () => {
     const resetView = useStore(state => state.resetView);
 
     return (
-        <div className="glass-dark animate-slide-up studio-controls" style={{
-            position: 'absolute', bottom: 30, left: 30,
-            padding: '12px 25px', borderRadius: '100px', display: 'flex', gap: 20, alignItems: 'center',
-            zIndex: 100, border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
-            background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)',
-            maxWidth: 'calc(100vw - 40px)',
-            flexWrap: 'wrap',
-            justifyContent: 'center'
-        }}>
-
+        <div className="studio-controls animate-slide-up">
             {/* Model Selector */}
             <ModelSelector />
 
-            <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)' }} />
+            <div className="studio-controls-divider" style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)' }} />
 
             {/* Physics Intensity Control */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
