@@ -11,20 +11,20 @@ import { SpringSolver } from '../logic/SpringSolver';
 export const AVAILABLE_MODELS = [
     {
         id: 'jeny',
-        name: 'Jeny T-Pose',
-        path: '/models/jeny_tpose_riged.glb',
+        name: 'Jeny',
+        path: '/models/jeny.glb',
         config: { position: [0, -1.0, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
     {
-        id: 'christmas',
-        name: 'Christmas Girl',
-        path: '/models/christmas_girl.glb',
+        id: 'noelle',
+        name: 'Noelle',
+        path: '/models/noelle.glb',
         config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
     {
-        id: 'base_mesh',
-        name: 'Base Mesh Female',
-        path: '/models/base_mesh_female_with_rig_and_textures.glb',
+        id: 'eva',
+        name: 'Eva (Base)',
+        path: '/models/eva.glb',
         config: { position: [0, -2.5, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
     {
