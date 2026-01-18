@@ -37,23 +37,22 @@ export const AVAILABLE_MODELS = [
         id: 'seraphina',
         name: 'Seraphina',
         path: '/models/seraphina.glb',
-        // Scaled down drastically as requested. Lowered more (was -1.3 -> -1.5)
-        config: { position: [0, -1.5, 0], scale: 0.015, rotation: [0, 0, 0] }
+        // Lowered more for zoom centering (-1.5 -> -2.0)
+        config: { position: [0, -2.0, 0], scale: 0.015, rotation: [0, 0, 0] }
     },
     {
         id: 'isabella',
         name: 'Isabella',
         path: '/models/isabella.glb',
-        // Flipped X axis to fix upside-down, scaled up. Lowered more (-2.2 -> -2.5) . 
-        // invertRotation: true because upside down mesh causes inverted Y control?
-        config: { position: [0, -2.5, 0], scale: 2.5, rotation: [Math.PI, 0, 0], invertRotation: true }
+        // Lowered more for zoom centering (-2.5 -> -3.5)
+        config: { position: [0, -3.5, 0], scale: 2.5, rotation: [Math.PI, 0, 0], invertRotation: true }
     },
     {
         id: 'amara',
         name: 'Amara',
         path: '/models/amara.glb',
-        // Lowered more (-2.0 -> -2.2)
-        config: { position: [0, -2.2, 0], scale: 1.0, rotation: [0, 0, 0] }
+        // Lowered more for zoom centering (-2.2 -> -2.7)
+        config: { position: [0, -2.7, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
 ];
 
@@ -446,9 +445,11 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
             if (child instanceof THREE.Mesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+
+                // Texture fix: Only set intensity if envMap exists and not overriding core look
+                // Removing hardcoded roughness=0.6 which might wash out skin tones
                 if (child.material) {
-                    child.material.envMapIntensity = 1;
-                    child.material.roughness = 0.6;
+                    child.material.envMapIntensity = 0.5; // Lower default to avoid blowout
                 }
             }
         });
