@@ -4,7 +4,7 @@ const GestureGuide: React.FC = () => {
     return (
         <div className="glass-dark animate-fade-in" style={{
             position: 'absolute',
-            top: 20,
+            top: 100, // Moved below the status bar (was 20)
             right: 20,
             padding: '15px 20px',
             borderRadius: '12px',
