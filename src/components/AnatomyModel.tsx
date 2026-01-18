@@ -206,15 +206,8 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             if (ref.current) {
                 initialRotations.current[ref.current.uuid] = ref.current.rotation.clone();
 
-                // --- Default Pose Init ---
-                // We'll calculate the actual "loose" rotation in useFrame
-                // But we set a starting bias here
-                if (ref === armLRef && ref.current) {
-                    ref.current.rotation.z = modelId === 'isabella' ? Math.PI / 4 : -Math.PI / 4;
-                }
-                if (ref === armRRef && ref.current) {
-                    ref.current.rotation.z = modelId === 'isabella' ? -Math.PI / 4 : Math.PI / 4;
-                }
+                // ARM PHYSICS: We will set the rotation dynamically in useFrame
+                // based on initialRotations, so we don't need to bias them here.
 
                 // --- Apply Bone Offsets from Config ---
                 const config = AVAILABLE_MODELS.find(m => m.id === modelId)?.config;
@@ -288,8 +281,8 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         const rightChestValue = rightChestSpring.current.update(deltaTime);
 
         // === LOOSE ARM PHYSICS ===
-        const armDangleBase = Math.PI / 3.5; // ~50 degrees
-        const armSway = Math.sin(time * 0.8) * 0.05 * movementIntensity;
+        const armDangleBase = Math.PI / 2.5; // ~72 degrees down
+        const armSway = Math.sin(time * 0.8) * 0.08 * movementIntensity;
 
         armLSpring.current.target = armDangleBase + armSway;
         armRSpring.current.target = armDangleBase + armSway;
@@ -297,11 +290,26 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         const armLValue = armLSpring.current.update(deltaTime);
         const armRValue = armRSpring.current.update(deltaTime);
 
-        if (armLRef.current) {
-            armLRef.current.rotation.z = modelId === 'isabella' ? armLValue : -armLValue;
+        // Apply RELATIVE to initial rotations
+        if (armLRef.current && initialRotations.current[armLRef.current.uuid]) {
+            const base = initialRotations.current[armLRef.current.uuid];
+            armLRef.current.rotation.z = base.z + (modelId === 'isabella' ? armLValue : -armLValue);
         }
-        if (armRRef.current) {
-            armRRef.current.rotation.z = modelId === 'isabella' ? -armRValue : armRValue;
+        if (armRRef.current && initialRotations.current[armRRef.current.uuid]) {
+            const base = initialRotations.current[armRRef.current.uuid];
+            armRRef.current.rotation.z = base.z + (modelId === 'isabella' ? -armRValue : armRValue);
+        }
+
+        // Add Shoulder Drop for "loose" look
+        if (shoulderLRef.current && initialRotations.current[shoulderLRef.current.uuid]) {
+            const base = initialRotations.current[shoulderLRef.current.uuid];
+            const drop = 0.15; // Subtle drop
+            shoulderLRef.current.rotation.z = base.z + (modelId === 'isabella' ? drop : -drop);
+        }
+        if (shoulderRRef.current && initialRotations.current[shoulderRRef.current.uuid]) {
+            const base = initialRotations.current[shoulderRRef.current.uuid];
+            const drop = 0.15;
+            shoulderRRef.current.rotation.z = base.z + (modelId === 'isabella' ? -drop : drop);
         }
 
         // Apply to breast bones (or chest as fallback)
