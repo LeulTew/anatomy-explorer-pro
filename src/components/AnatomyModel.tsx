@@ -11,6 +11,7 @@ export const AVAILABLE_MODELS = [
     { id: 'jeny', name: 'Jeny T-Pose', path: '/models/jeny_tpose_riged.glb' },
     { id: 'christmas', name: 'Christmas Girl', path: '/models/christmas_girl.glb' },
     { id: 'base_mesh', name: 'Base Mesh Female', path: '/models/base_mesh_female_with_rig_and_textures.glb' },
+    { id: 'michelle', name: 'Michelle (Standard)', path: '/models/michelle.glb' },
 ];
 
 // Bone analysis result type
