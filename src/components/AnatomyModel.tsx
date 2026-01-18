@@ -47,6 +47,12 @@ export const AVAILABLE_MODELS = [
         // Flipped X axis to fix upside-down, scaled up
         config: { position: [0, -2.0, 0], scale: 2.5, rotation: [Math.PI, 0, 0] }
     },
+    {
+        id: 'amara',
+        name: 'Amara',
+        path: '/models/amara.glb',
+        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
+    },
 ];
 
 // Bone analysis result type
