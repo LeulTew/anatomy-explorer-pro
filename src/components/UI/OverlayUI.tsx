@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../../store/useStore';
 import { AVAILABLE_MODELS } from '../AnatomyModel';
 import GestureGuide from './GestureGuide';
@@ -43,6 +43,77 @@ const SubscriptionOverlay: React.FC = () => {
                     </button>
                 </div>
             </div>
+        </div>
+    );
+};
+
+const BoneAnalysisTable: React.FC = () => {
+    const analysis = useStore(state => state.boneAnalysis);
+    const [expanded, setExpanded] = useState(false);
+
+    if (!analysis) return null;
+
+    return (
+        <div style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            background: 'rgba(10,10,10,0.85)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 8,
+            padding: 10,
+            fontSize: '0.65rem',
+            maxWidth: expanded ? 300 : 200,
+            transition: 'all 0.3s ease',
+            zIndex: 1000,
+            color: '#ddd'
+        }}>
+            <div
+                onClick={() => setExpanded(!expanded)}
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 5, borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: 5 }}
+            >
+                <strong style={{ color: '#00f7ff' }}>BONE ANALYSIS: {analysis.modelName}</strong>
+                <span>{expanded ? '▲' : '▼'}</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 4 }}>
+                <span>Spine (Torso)</span>
+                <span style={{ color: analysis.hasSpine ? '#0f0' : '#f00' }}>{analysis.hasSpine ? '✓ Found' : '✗ Missing'}</span>
+
+                <span>Hips (Pelvis)</span>
+                <span style={{ color: analysis.hasHips ? '#0f0' : '#f00' }}>{analysis.hasHips ? '✓ Found' : '✗ Missing'}</span>
+
+                <span>Chest</span>
+                <span style={{ color: analysis.hasChest ? '#0f0' : '#f00' }}>{analysis.hasChest ? '✓ Found' : '✗ Missing'}</span>
+
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', gridColumn: '1 / -1', margin: '2px 0' }} />
+
+                <span>Breast Left</span>
+                <span style={{ color: analysis.hasBreastL ? '#0f0' : '#f00' }}>{analysis.hasBreastL ? '✓ Found' : '✗ Missing'}</span>
+
+                <span>Breast Right</span>
+                <span style={{ color: analysis.hasBreastR ? '#0f0' : '#f00' }}>{analysis.hasBreastR ? '✓ Found' : '✗ Missing'}</span>
+
+                <div style={{ height: 1, background: 'rgba(255,255,255,0.1)', gridColumn: '1 / -1', margin: '2px 0' }} />
+
+                <span>Butt/Glute Left</span>
+                <span style={{ color: analysis.hasButtL ? '#0f0' : '#f00' }}>{analysis.hasButtL ? '✓ Found' : '✗ Missing'}</span>
+
+                <span>Butt/Glute Right</span>
+                <span style={{ color: analysis.hasButtR ? '#0f0' : '#f00' }}>{analysis.hasButtR ? '✓ Found' : '✗ Missing'}</span>
+            </div>
+
+            {expanded && (
+                <div style={{ marginTop: 10, paddingTop: 5, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ marginBottom: 3, opacity: 0.7 }}>All Bones ({analysis.allBoneNames.length}):</div>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: '0.6rem', color: '#888' }}>
+                        {analysis.allBoneNames.map((name: string) => (
+                            <div key={name}>{name}</div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -155,6 +226,7 @@ const OverlayUI: React.FC = () => {
             {!isVerified && <SubscriptionOverlay />}
             {isVerified && (
                 <>
+                    <BoneAnalysisTable />
                     <GestureGuide />
                     <StudioControls />
                 </>

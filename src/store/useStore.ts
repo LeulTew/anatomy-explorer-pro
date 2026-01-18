@@ -57,6 +57,10 @@ interface AppState {
     selectedModel: string;
     setSelectedModel: (modelId: string) => void;
 
+    // Bone Analysis
+    boneAnalysis: any;
+    setBoneAnalysis: (analysis: any) => void;
+
     resetView: () => void; // Resets accumulated rotation to zero
 }
 
@@ -104,4 +108,7 @@ export const useStore = create<AppState>((set) => ({
     setSelectedModel: (selectedModel) => set({ selectedModel }),
 
     resetView: () => set({ accumulatedRotation: { x: 0, y: 0 }, zoomFactor: 1 }),
+
+    boneAnalysis: null,
+    setBoneAnalysis: (boneAnalysis) => set({ boneAnalysis }),
 }));

@@ -116,8 +116,9 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
     };
 
     useEffect(() => {
-        // Analyze and log bone structure
-        analyzeBones(nodes, modelName);
+        // Analyze and save bone structure to store
+        const analysis = analyzeBones(nodes, modelName);
+        useStore.getState().setBoneAnalysis(analysis);
 
         // Find bones
         hipsRef.current = findBone(['hips', 'pelvis', 'root']);
