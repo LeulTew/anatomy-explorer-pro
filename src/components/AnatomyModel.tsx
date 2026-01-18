@@ -77,7 +77,7 @@ UpperLeg: ${boneNames.filter(b => b.toLowerCase().includes('upleg') || b.toLower
  * Front view: chest movement
  * Back view: glute movement
  */
-const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string }> = ({ nodes, modelName }) => {
+const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string, modelId?: string }> = ({ nodes, modelName, modelId }) => {
     // Core bones
     const hipsRef = useRef<THREE.Bone | null>(null);
     const chestRef = useRef<THREE.Bone | null>(null);
@@ -261,12 +261,16 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             const base = initialRotations.current[hipsRef.current.uuid];
             if (isLeftInteracting) {
                 // Left hand → tilt model's RIGHT side (viewer's left)
-                hipsRef.current.rotation.z = base.z - leftChestOffset.x * 0.6; // Negative for right side
-                hipsRef.current.rotation.x = base.x + leftChestOffset.y * 0.4;
+                // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
+                const mult = (!buttLRef.current) ? 1.5 : 1.0;
+                hipsRef.current.rotation.z = base.z - leftChestOffset.x * 0.6 * mult; // Negative for right side
+                hipsRef.current.rotation.x = base.x + leftChestOffset.y * 0.4 * mult;
             } else if (isRightInteracting) {
                 // Right hand → tilt model's LEFT side (viewer's right)
-                hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6; // Positive for left side
-                hipsRef.current.rotation.x = base.x + rightChestOffset.y * 0.4;
+                // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
+                const mult = (!buttRRef.current) ? 1.5 : 1.0;
+                hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6 * mult; // Positive for left side
+                hipsRef.current.rotation.x = base.x + rightChestOffset.y * 0.4 * mult;
             } else {
                 hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
                 hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
@@ -296,7 +300,11 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         // Upper leg fallback - Model's LEFT leg - controlled by RIGHT hand (SWAPPED)
         if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isRightInteracting) {
             const base = initialRotations.current[upperLegLRef.current.uuid];
-            upperLegLRef.current.rotation.z = base.z + leftHipValue * 0.2 + rightChestOffset.y * 0.3;
+            // REDUCED LEG SWING - User feedback: "legs moving not ass"
+            // We use minimal leg swing and rely on the enhanced hip movement above
+            upperLegLRef.current.rotation.z = base.z + (leftHipValue * 0.05) + (rightChestOffset.y * 0.08);
+            // Add slight twist for better look?
+            upperLegLRef.current.rotation.y = base.y - rightChestOffset.x * 0.1;
         } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
             const base = initialRotations.current[upperLegLRef.current.uuid];
             upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
@@ -305,7 +313,11 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         // Upper leg fallback - Model's RIGHT leg - controlled by LEFT hand (SWAPPED)
         if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isLeftInteracting) {
             const base = initialRotations.current[upperLegRRef.current.uuid];
-            upperLegRRef.current.rotation.z = base.z + rightHipValue * 0.2 + leftChestOffset.y * 0.3;
+            // REDUCED LEG SWING - User feedback: "legs moving not ass"
+            // We use minimal leg swing and rely on the enhanced hip movement above
+            upperLegRRef.current.rotation.z = base.z + (rightHipValue * 0.05) + (leftChestOffset.y * 0.08);
+            // Add slight twist for better look?
+            upperLegRRef.current.rotation.y = base.y + leftChestOffset.x * 0.1;
         } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
             const base = initialRotations.current[upperLegRRef.current.uuid];
             upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
@@ -318,7 +330,7 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
 /**
  * Model Loader Component with lazy loading
  */
-const ModelLoader: React.FC<{ modelPath: string, modelName: string }> = ({ modelPath, modelName }) => {
+const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: string }> = ({ modelPath, modelName, modelId }) => {
     const groupRef = useRef<THREE.Group>(null);
     const { scene } = useGLTF(modelPath);
     const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
@@ -353,10 +365,13 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string }> = ({ model
         groupRef.current.scale.setScalar(THREE.MathUtils.lerp(groupRef.current.scale.x, targetScale, 0.1));
     });
 
+    // Base mesh is too high, lower it specifically
+    const yOffset = modelId === 'base_mesh' ? -1.35 : -1.0;
+
     return (
-        <group ref={groupRef} dispose={null} position={[0, -1, 0]}>
+        <group ref={groupRef} dispose={null} position={[0, yOffset, 0]}>
             <primitive object={clone} />
-            <RigController nodes={nodes} modelName={modelName} />
+            <RigController nodes={nodes} modelName={modelName} modelId={modelId} />
         </group>
     );
 };
@@ -369,7 +384,7 @@ const AnatomyModel: React.FC<{ selectedModel?: string }> = ({ selectedModel = 'j
 
     return (
         <Suspense fallback={null}>
-            <ModelLoader modelPath={model.path} modelName={model.name} />
+            <ModelLoader modelPath={model.path} modelName={model.name} modelId={model.id} />
         </Suspense>
     );
 };
