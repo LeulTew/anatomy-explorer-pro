@@ -4,9 +4,10 @@ import { useGLTF } from '@react-three/drei';
 import { useStore } from '../store/useStore';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+import { SpringSolver } from '../logic/SpringSolver';
 
 // Path to the model - assuming user will place it here
-const MODEL_PATH = '/models/base_mesh_female_with_rig_and_textures.glb';
+const MODEL_PATH = '/models/jeny_tpose_riged.glb';
 
 /**
  * Controller component that attaches to the skeleton and drives bones based on Store state.
@@ -22,28 +23,72 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D> }> = ({ no
     const leftForeArmRef = useRef<THREE.Bone | null>(null);
     const rightForeArmRef = useRef<THREE.Bone | null>(null);
 
+    // Physics for Secondary Motion (Jiggle Physics)
+    // We use independent springs for Left/Right sides for "natural" async movement
+    const leftSpring = useRef(new SpringSolver(0, 150, 8));
+    const rightSpring = useRef(new SpringSolver(0, 150, 8));
+
+    // Refs for "Breast" or chest bones. adjusting naming based on common "Jeny" rig
+    const breastLRef = useRef<THREE.Bone | null>(null);
+    const breastRRef = useRef<THREE.Bone | null>(null);
+
     // Initial pose storage
     const initialRotations = useRef<Record<string, THREE.Euler>>({});
 
+    // State for debug overlay removed
+
+    // Fuzzy find helper
+    const findBone = (patterns: string[], exclusion: string[] = []): THREE.Bone | null => {
+        const nodeNames = Object.keys(nodes);
+        for (const pattern of patterns) {
+            const match = nodeNames.find(name => {
+                const lower = name.toLowerCase();
+                // Must match pattern, not be in exclusion, and be a Bone
+                return lower.includes(pattern.toLowerCase()) &&
+                    !exclusion.some(ex => lower.includes(ex)) &&
+                    nodes[name] instanceof THREE.Bone;
+            });
+            if (match) return nodes[match] as THREE.Bone;
+        }
+        return null;
+    };
+
     useEffect(() => {
-        // Map common bone names from Mixamo/standard rigs
-        // Adjust these names if the specific GLB uses different conventions
-        spineRef.current = (nodes.Mixamorig_Spine || nodes.Spine || nodes.spine) as THREE.Bone;
-        chestRef.current = (nodes.Mixamorig_Spine2 || nodes.Chest || nodes.chest) as THREE.Bone;
-        neckRef.current = (nodes.Mixamorig_Neck || nodes.Neck || nodes.neck) as THREE.Bone;
+        // --- Smart Auto-Rigging ---
+        // We search for standard names using fuzzy matching
 
-        leftArmRef.current = (nodes.Mixamorig_LeftArm || nodes.LeftArm || nodes.upper_arm_L) as THREE.Bone;
-        rightArmRef.current = (nodes.Mixamorig_RightArm || nodes.RightArm || nodes.upper_arm_R) as THREE.Bone;
-        leftForeArmRef.current = (nodes.Mixamorig_LeftForeArm || nodes.LeftForeArm || nodes.forearm_L) as THREE.Bone;
-        rightForeArmRef.current = (nodes.Mixamorig_RightForeArm || nodes.RightForeArm || nodes.forearm_R) as THREE.Bone;
+        spineRef.current = findBone(['Mixamorig_Spine', 'Spine', 'Torso'], ['Spine1', 'Spine2']);
+        chestRef.current = findBone(['Mixamorig_Spine2', 'Chest', 'Spine2', 'UpperChest', 'Sternum']);
+        neckRef.current = findBone(['Mixamorig_Neck', 'Neck', 'Head']); // Be careful not to grab Head as neck
 
-        // Store initial rotations to lerp back to
-        [spineRef, chestRef, neckRef, leftArmRef, rightArmRef, leftForeArmRef, rightForeArmRef].forEach(ref => {
+        leftArmRef.current = findBone(['Mixamorig_LeftArm', 'LeftArm', 'Arm_L', 'UpperArm_L']);
+        rightArmRef.current = findBone(['Mixamorig_RightArm', 'RightArm', 'Arm_R', 'UpperArm_R']);
+        leftForeArmRef.current = findBone(['Mixamorig_LeftForeArm', 'LeftForeArm', 'ForeArm_L', 'Elbow_L']);
+        rightForeArmRef.current = findBone(['Mixamorig_RightForeArm', 'RightForeArm', 'ForeArm_R', 'Elbow_R']);
+
+        // Secondary Motion (Priority: Breast -> Pectoral -> Chest Child)
+        breastLRef.current = findBone(['Breast_L', 'BreastL', 'Pectoral_L', 'BoobL', 'Chest_L']);
+        breastRRef.current = findBone(['Breast_R', 'BreastR', 'Pectoral_R', 'BoobR', 'Chest_R']);
+
+        // Debug: Log Chest Children to find hidden bones
+        if (chestRef.current) {
+            // console.log('RigController: Chest Children:', chestRef.current.children.map(c => c.name));
+        }
+
+        // Debug logic removed
+
+        // console.log('RigController: Auto-Rigged:', found);
+        // setDebugInfo(Object.entries(found).map(([k, v]) => `${k}: ${v || 'MISSING'}`));
+
+        // Store initial rotations
+        [spineRef, chestRef, neckRef, leftArmRef, rightArmRef, leftForeArmRef, rightForeArmRef, breastLRef, breastRRef].forEach(ref => {
             if (ref.current) {
                 initialRotations.current[ref.current.uuid] = ref.current.rotation.clone();
             }
         });
     }, [nodes]);
+
+    const prevTime = useRef(0);
 
     // Use specific store selectors to avoid re-renders on every frame-ish update
     // We pull values mutable inside useFrame for performance
@@ -57,29 +102,89 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D> }> = ({ no
         } = useStore.getState();
 
         const time = state.clock.getElapsedTime();
+        const deltaTime = time - prevTime.current;
+        prevTime.current = time;
 
-        // --- 1. Breathing Simulation ---
-        // Animate chest expansion (Scale or slight rotation)
-        if (chestRef.current) {
+        // --- 0. Calculated "Body Velocity" for Physics ---
+        // We calculate "Movement Noise" from the rotation delta (Hand Control)
+        // High rotation speed = high noise = bigger bounce
+        const movementNoise = (Math.abs(rotationDelta.x) + Math.abs(rotationDelta.y)) * 0.5;
+
+        // Update Springs
+        // Target is 0 (rest position). We "pull" the spring based ONLY on hand movement (velocity)
+        // We add a tiny bit of breathing pulse (very slow) just to keep it alive
+        const breathPulse = Math.sin(time * 1.0) * 0.02; // Very subtle life sign
+
+        // Physics Force is now driven by USER HAND MOVEMENT (movementNoise)
+        const physicsForce = (movementNoise * 20.0);
+
+        leftSpring.current.target = physicsForce + breathPulse;
+        rightSpring.current.target = physicsForce + breathPulse; // In future can offset L/R based on direction
+
+        // Add a slight phase offset/randomness for "natural" asymmetry
+        const lValue = leftSpring.current.update(deltaTime);
+        const rValue = rightSpring.current.update(deltaTime);
+
+        // Apply to Secondary Bones
+        const bounceAmt = 0.3; // Scale effect for specific bones
+
+        // If we have specific breast bones, animate them
+        if (breastLRef.current) {
+            const base = initialRotations.current[breastLRef.current.uuid];
+            breastLRef.current.rotation.x = base.x + (lValue * bounceAmt);
+        }
+
+        if (breastRRef.current) {
+            const base = initialRotations.current[breastRRef.current.uuid];
+            breastRRef.current.rotation.x = base.x + (rValue * bounceAmt);
+        }
+
+        // FALLBACK: If NO breast bones, apply physics to the Chest
+        // This ensures "Jiggle" / "Secondary Motion" is felt even without specific bones
+        if (chestRef.current && !breastLRef.current && !breastRRef.current) {
+            const base = initialRotations.current[chestRef.current.uuid];
+
+            // We combine the spring physics with the breathing cycle
+            // lValue/rValue contain the physics "bounce"
+            const physicsOffset = (lValue + rValue) * 0.15; // Lower intensity for whole chest
+
             const breathCycle = Math.sin(time * 1.5) * 0.05 * (0.5 + movementIntensity);
-            // We gently rotate the chest back and forth to simulate heave
+
+            // X-axis rotation mimics heave/bounce
+            chestRef.current.rotation.x = base.x + physicsOffset - breathCycle;
+        } else if (chestRef.current) {
+            // Basic breathing only if we HAVE breast bones doing the physics
+            const breathCycle = Math.sin(time * 1.5) * 0.05 * (0.5 + movementIntensity);
             chestRef.current.rotation.x = initialRotations.current[chestRef.current.uuid].x - breathCycle;
         }
 
         // --- 2. Global Rotation (Torso/Spine) from Gestures ---
-        // If "Grab" gesture is active on left/right hand, we rotate the spine
+        const { gesture } = useStore.getState(); // Get fresh gesture to be sure
+
         if (spineRef.current) {
-            // Apply gesture delta with damping
             const targetRotY = rotationDelta.x * 0.01;
             const targetRotX = rotationDelta.y * 0.01;
 
-            // Accumulate or set? Let's add to current for "orbit" feel or set for "direct control"
-            // For anatomy, direct control feels better + spring back
-            spineRef.current.rotation.y = THREE.MathUtils.lerp(spineRef.current.rotation.y, initialRotations.current[spineRef.current.uuid].y + targetRotY, 0.1);
-            spineRef.current.rotation.z = THREE.MathUtils.lerp(spineRef.current.rotation.z, initialRotations.current[spineRef.current.uuid].z - targetRotX, 0.1);
+            if (gesture === 'ROTATE') {
+                // FIST: Mostly Horizontal (Yaw), dampen Vertical (Pitch)
+                spineRef.current.rotation.y = THREE.MathUtils.lerp(spineRef.current.rotation.y, initialRotations.current[spineRef.current.uuid].y + targetRotY, 0.1);
+                // Very slight pitch allowed (0.1x)
+                spineRef.current.rotation.z = THREE.MathUtils.lerp(spineRef.current.rotation.z, initialRotations.current[spineRef.current.uuid].z - (targetRotX * 0.1), 0.1);
+            }
+            else if (gesture === 'INTERACT' && chestRef.current) {
+                // OPEN HAND: Interact with Chest directly
+                // Map hand Y movement (reversed, up is positive Y in screen usually means negative in 3D depending on cam)
+                // Hand Y: Up (negative pixel/coord) -> Chest Expand/Up
+                // rotationDelta.y is current - prev. Negative = Moved Up.
 
-            // Decay rotationDelta logic is handled in store or we reset it here?
-            // The store logic in previous file handled damping. We assume store updates delta.
+                // We want 1:1 feel. No "lerp" lag if possible, or very fast lerp.
+                // We accumulate delta to the chest rotation? Or just map delta directly to "push"?
+                // Let's try adding delta directly to rotation for "dragging" feel
+
+                const dragAmount = -targetRotX * 2.0; // Sensitivity 
+                spineRef.current.rotation.z += dragAmount; // Tilt spine
+                chestRef.current.rotation.x += dragAmount; // Chest heave
+            }
         }
 
         // --- 3. Interaction / Movement Logic ---
@@ -100,11 +205,9 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D> }> = ({ no
         }
 
         // "Twist" -> Rotate Spine
-        else if (currentMovement === 'Twist') {
-            if (spineRef.current) {
-                const twistAmt = Math.sin(time * 2) * movementIntensity;
-                spineRef.current.rotation.y = initialRotations.current[spineRef.current.uuid].y + twistAmt;
-            }
+        else if (currentMovement === 'Twist' && spineRef.current) {
+            const twistAmt = Math.sin(time * 2) * movementIntensity;
+            spineRef.current.rotation.y = initialRotations.current[spineRef.current.uuid].y + twistAmt;
         }
 
         // Direct Hand Mapping (Advanced)
@@ -127,7 +230,11 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D> }> = ({ no
         }
     });
 
-    return null;
+    return (
+        <group>
+            {/* Debug Overlay removed for production */}
+        </group>
+    );
 };
 
 const AnatomyModel: React.FC = () => {

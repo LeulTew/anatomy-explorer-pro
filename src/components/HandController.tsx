@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Hands, type Results } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
-import { useStore } from '../store/useStore';
+import { useStore, type Hand } from '../store/useStore';
 import { GestureRecognizer } from '../logic/GestureRecognizer';
 
 // Module-level singleton to prevent React Strict Mode from creating multiple WASM instances
@@ -25,7 +25,7 @@ async function getOrCreateHands(): Promise<Hands | null> {
     isInitializing = true;
     initializationPromise = (async () => {
         try {
-            console.log('Creating new Hands instance (Local)...');
+            // console.log('Creating new Hands instance (Local)...');
             const hands = new Hands({
                 locateFile: (file) => `/mediapipe/${file}`
             });
@@ -37,7 +37,7 @@ async function getOrCreateHands(): Promise<Hands | null> {
             );
 
             await Promise.race([initPromise, timeoutPromise]);
-            console.log('MediaPipe Hands initialized successfully');
+            // console.log('MediaPipe Hands initialized successfully');
 
             hands.setOptions({
                 maxNumHands: 2,
@@ -49,7 +49,7 @@ async function getOrCreateHands(): Promise<Hands | null> {
             globalHandsInstance = hands;
             return hands;
         } catch (error) {
-            console.error('Failed to initialize MediaPipe:', error);
+            // console.error('Failed to initialize MediaPipe:', error);
             return null;
         } finally {
             isInitializing = false;
@@ -68,6 +68,11 @@ const HandController: React.FC = () => {
     const updateHandsRef = useRef(useStore.getState().updateHands);
     const setModelLoadedRef = useRef(useStore.getState().setModelLoaded);
 
+    // Refs for gesture tracking (moved from GestureManager)
+    const prevRightCentroid = useRef<{ x: number, y: number } | null>(null);
+    const prevDist = useRef<number | null>(null);
+    const lastUpdateRef = useRef<number>(0);
+
     // Subscribe to store changes for camera state
     const isCameraActive = useStore(state => state.isCameraActive);
 
@@ -77,26 +82,26 @@ const HandController: React.FC = () => {
         let loadingTimeout: ReturnType<typeof setTimeout>;
 
         const initializeMediaPipe = async () => {
-            console.log('HandController: Starting initialization...');
+            // console.log('HandController: Starting initialization...');
 
             // Long timeout - just a safety net, not expected to fire normally
             loadingTimeout = setTimeout(() => {
                 if (isActive) {
-                    console.warn('Loading timeout reached (15s) - dismissing loading screen as fallback');
+                    // console.warn('Loading timeout reached (15s) - dismissing loading screen as fallback');
                     useStore.getState().setModelLoaded(true);
                 }
             }, 15000);
 
             try {
                 // Use singleton to prevent WASM corruption from Strict Mode
-                console.log('Waiting for MediaPipe singleton...');
+                // console.log('Waiting for MediaPipe singleton...');
                 const hands = await getOrCreateHands();
-                console.log('Got hands:', !!hands);
+                // console.log('Got hands:', !!hands);
 
                 clearTimeout(loadingTimeout);
 
                 if (!hands) {
-                    console.error('Failed to get Hands instance');
+                    // console.error('Failed to get Hands instance');
                     useStore.getState().setModelLoaded(true);
                     return;
                 }
@@ -114,12 +119,13 @@ const HandController: React.FC = () => {
 
                     if (!isActive) return;
 
-                    let leftHand = null;
-                    let rightHand = null;
+                    let leftHand: Hand | null = null;
+                    let rightHand: Hand | null = null;
 
                     if (results.multiHandLandmarks && results.multiHandedness) {
-                        results.multiHandLandmarks.forEach((landmarks, index) => {
-                            if (!results.multiHandedness[index]) return;
+                        for (let index = 0; index < results.multiHandLandmarks.length; index++) {
+                            const landmarks = results.multiHandLandmarks[index];
+                            if (!results.multiHandedness[index]) continue;
 
                             const label = results.multiHandedness[index].label;
                             const keypoints = landmarks.map(lm => ({ x: lm.x, y: lm.y, z: lm.z }));
@@ -127,17 +133,95 @@ const HandController: React.FC = () => {
 
                             if (label === 'Left') leftHand = handData;
                             else rightHand = handData;
-                        });
+                        }
                     }
 
-                    updateHandsRef.current(leftHand, rightHand);
+                    // --- Integrated Gesture Logic (Prevents Update Depth Loops) ---
+                    // Instead of a separate component reacting to store changes, we process inputs here
+                    // and apply a single batched update to the store.
+
+                    const state = useStore.getState();
+                    let currentGesture: 'IDLE' | 'ROTATE' | 'ZOOM_IN' | 'ZOOM_OUT' | 'PAN' | 'INTERACT' = 'IDLE';
+                    let newZoom = state.zoomFactor;
+                    let rotationDelta = { x: 0, y: 0 };
+
+                    if (leftHand && rightHand) {
+                        // Two hands = Zoom
+                        const dist = GestureRecognizer.calculateDistance(leftHand.centroid, rightHand.centroid);
+                        if (prevDist.current !== null) {
+                            const delta = dist - prevDist.current;
+                            if (Math.abs(delta) > 0.005) {
+                                currentGesture = delta > 0 ? 'ZOOM_IN' : 'ZOOM_OUT';
+                                newZoom = state.zoomFactor * (1 + delta * 2);
+                                newZoom = Math.max(0.5, Math.min(newZoom, 5));
+                            }
+                        }
+                        prevDist.current = dist;
+                    } else {
+                        prevDist.current = null;
+                    }
+
+                    const activeHand = rightHand || leftHand;
+
+                    if (currentGesture === 'IDLE' && activeHand) {
+                        const current = activeHand.centroid;
+
+                        if (activeHand.isGrabbing) {
+                            // Fist = Rotate (Either Hand)
+                            currentGesture = 'ROTATE';
+                            if (prevRightCentroid.current) {
+                                const deltaX = current.x - prevRightCentroid.current.x;
+                                const deltaY = current.y - prevRightCentroid.current.y;
+                                rotationDelta = { x: deltaX, y: deltaY };
+                            }
+                        } else if (activeHand.isOpen) {
+                            // Open Hand = Interact (Chest Move)
+                            currentGesture = 'INTERACT';
+                            if (prevRightCentroid.current) {
+                                const deltaX = current.x - prevRightCentroid.current.x;
+                                const deltaY = current.y - prevRightCentroid.current.y;
+                                rotationDelta = { x: deltaX, y: deltaY };
+                            }
+                        }
+
+                        prevRightCentroid.current = current;
+                    } else {
+                        // Reset if no active hand
+                        prevRightCentroid.current = null;
+                    }
+
+                    // Direct store update (Throttled to ~30fps to prevent React loop)
+                    const now = performance.now();
+                    // Use a static ref for timing if possible, but here we can use a closure variable if defined outside
+                    // Actually, we can just use a simple frame skip or check relative change?
+                    // Better: just check if we really need to update.
+
+                    // Ideally we should use a ref for lastUpdate time.
+                    // Let's add that to the component scope refs.
+
+                    // For now, let's just use requestAnimationFrame batching? No, setState is already batched.
+                    // The issue is likely the sheer frequency.
+                    // Let's modify the onResults callback to use a ref for throttling.
+
+                    // See 'lastUpdateRef' added to component below.
+                    if (now - lastUpdateRef.current > 32) { // ~30fps
+                        lastUpdateRef.current = now;
+                        useStore.setState({
+                            leftHand,
+                            rightHand,
+                            gesture: currentGesture,
+                            zoomFactor: newZoom,
+                            rotationDelta: rotationDelta
+                        });
+                    }
                 });
 
                 handsRef.current = hands;
 
                 // 4. Start Camera only after hands is ready
                 if (videoRef.current) {
-                    console.log('Starting camera...');
+                    // ... continues as before
+                    // console.log('Starting camera...');
                     const camera = new Camera(videoRef.current, {
                         onFrame: async () => {
                             // Only send if active and hands instance exists
@@ -145,7 +229,7 @@ const HandController: React.FC = () => {
                                 try {
                                     await handsRef.current.send({ image: videoRef.current });
                                 } catch (e) {
-                                    console.error('MediaPipe send error:', e);
+                                    // console.error('MediaPipe send error:', e);
                                 }
                             }
                         },
@@ -155,11 +239,11 @@ const HandController: React.FC = () => {
 
                     cameraRef.current = camera;
                     await camera.start();
-                    console.log('Camera started successfully');
+                    // console.log('Camera started successfully');
                 }
 
             } catch (error) {
-                console.error('Initialization error:', error);
+                // console.error('Initialization error:', error);
                 // Dismiss loading screen on error so app is usable (just without hands)
                 useStore.getState().setModelLoaded(true);
             }
@@ -181,7 +265,7 @@ const HandController: React.FC = () => {
         if (!cameraRef.current) return;
 
         if (isCameraActive) {
-            cameraRef.current.start().catch(console.error);
+            cameraRef.current.start().catch(() => { });
         } else {
             cameraRef.current.stop();
             // Clear hands when camera is off

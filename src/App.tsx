@@ -1,71 +1,11 @@
-import React, { useEffect, useRef } from 'react';
 import Scene3D from './components/Scene3D';
 import HandController from './components/HandController';
 import { useStore } from './store/useStore';
-import { GestureRecognizer } from './logic/GestureRecognizer';
 // ANATOMY_DATA removed as unused
 import OverlayUI from './components/UI/OverlayUI';
 
 // --- Gesture Logic ---
-const GestureManager: React.FC = () => {
-    const leftHand = useStore(state => state.leftHand);
-    const rightHand = useStore(state => state.rightHand);
-    const zoomFactor = useStore(state => state.zoomFactor);
-    const setZoomFactor = useStore(state => state.setZoomFactor);
-    const setGesture = useStore(state => state.setGesture);
-    const setRotationDelta = useStore(state => state.setRotationDelta);
 
-    const prevRightCentroid = useRef<{ x: number, y: number } | null>(null);
-    const prevDist = useRef<number | null>(null);
-
-    useEffect(() => {
-        let currentGesture: 'IDLE' | 'ROTATE' | 'ZOOM_IN' | 'ZOOM_OUT' | 'PAN' = 'IDLE';
-
-        if (leftHand && rightHand) {
-            // Two hands = Zoom
-            const dist = GestureRecognizer.calculateDistance(leftHand.centroid, rightHand.centroid);
-            if (prevDist.current !== null) {
-                const delta = dist - prevDist.current;
-                if (Math.abs(delta) > 0.005) {
-                    currentGesture = delta > 0 ? 'ZOOM_IN' : 'ZOOM_OUT';
-                    let newZoom = zoomFactor * (1 + delta * 2);
-                    newZoom = Math.max(0.5, Math.min(newZoom, 5));
-                    setZoomFactor(newZoom);
-                }
-            }
-            prevDist.current = dist;
-        } else {
-            prevDist.current = null;
-        }
-
-        if (currentGesture === 'IDLE' && rightHand && rightHand.isGrabbing) {
-            // Right Fist = Rotate
-            currentGesture = 'ROTATE';
-            const current = rightHand.centroid;
-            if (prevRightCentroid.current) {
-                const deltaX = current.x - prevRightCentroid.current.x;
-                const deltaY = current.y - prevRightCentroid.current.y;
-                setRotationDelta({ x: deltaX, y: deltaY });
-            }
-            prevRightCentroid.current = current;
-        } else {
-            if (rightHand) { prevRightCentroid.current = rightHand.centroid; }
-            else { prevRightCentroid.current = null; }
-
-            if (currentGesture === 'IDLE') {
-                setRotationDelta({ x: 0, y: 0 });
-            }
-        }
-        setGesture(currentGesture);
-    }, [leftHand, rightHand, zoomFactor, setGesture, setRotationDelta, setZoomFactor]);
-
-    // Reset on unmount
-    useEffect(() => {
-        return () => { setGesture('IDLE'); setRotationDelta({ x: 0, y: 0 }); };
-    }, [setGesture, setRotationDelta]);
-
-    return null;
-};
 
 // --- Info Panel removed ---
 
@@ -79,7 +19,6 @@ const App: React.FC = () => {
 
     return (
         <>
-            <GestureManager />
             <Scene3D />
             <HandController />
 

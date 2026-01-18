@@ -41,6 +41,24 @@ export class GestureRecognizer {
         return isCurled(12, 10) && isCurled(16, 14) && isCurled(20, 18);
     }
 
+    static isOpen(keypoints: Point[]): boolean {
+        // opposite of grab - fingers extended
+        if (!keypoints || keypoints.length < REQUIRED_KEYPOINTS) return false;
+
+        const isExtended = (tipIdx: number, pipIdx: number): boolean => {
+            const tip = keypoints[tipIdx];
+            const pip = keypoints[pipIdx];
+            const wrist = keypoints[WRIST];
+            if (!tip || !pip || !wrist) return false;
+
+            // Tip further from wrist than PIP = Extended
+            return this.calculateDistance(tip, wrist) > this.calculateDistance(pip, wrist);
+        };
+
+        // Check if at least 3 fingers are extended (including Index)
+        return isExtended(8, 6) && isExtended(12, 10) && isExtended(16, 14);
+    }
+
     static analyzeHand(keypoints: Point[], handedness: 'Left' | 'Right'): Hand | null {
         if (!keypoints || keypoints.length < REQUIRED_KEYPOINTS) {
             console.warn('GestureRecognizer: Invalid keypoints received');
@@ -58,6 +76,7 @@ export class GestureRecognizer {
 
         const isPinching = this.isPinching(keypoints);
         const isGrabbing = this.isGrabbing(keypoints);
+        const isOpen = this.isOpen(keypoints);
 
         const centroid = {
             x: (p0.x + p5.x + p17.x) / 3,
@@ -70,6 +89,7 @@ export class GestureRecognizer {
             handedness,
             isPinching,
             isGrabbing,
+            isOpen,
             centroid
         };
     }

@@ -7,13 +7,14 @@ export type Hand = {
     handedness: 'Left' | 'Right';
     isPinching: boolean; // Thumb-Index touch
     isGrabbing: boolean; // Fist
+    isOpen: boolean; // All fingers extended
     centroid: Point;
 };
 
 interface AppState {
     leftHand: Hand | null;
     rightHand: Hand | null;
-    gesture: 'IDLE' | 'ROTATE' | 'ZOOM_IN' | 'ZOOM_OUT' | 'PAN';
+    gesture: 'IDLE' | 'ROTATE' | 'ZOOM_IN' | 'ZOOM_OUT' | 'PAN' | 'INTERACT';
 
     // Navigation and View
     rotationDelta: { x: number; y: number };
