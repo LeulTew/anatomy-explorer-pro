@@ -1,23 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const GestureGuide: React.FC = () => {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    const [isOpen, setIsOpen] = useState(window.innerWidth > 768);
+
+    useEffect(() => {
+        const handleResize = () => {
+            const mobile = window.innerWidth <= 768;
+            setIsMobile(mobile);
+            if (!mobile) setIsOpen(true);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const toggleOpen = () => {
+        if (isMobile) {
+            setIsOpen(!isOpen);
+        }
+    };
 
     return (
-        <div className={`glass-dark animate-fade-in gesture-guide ${isOpen ? 'is-open' : 'is-collapsed'}`}>
-            <div className="gesture-guide-header" onClick={() => setIsOpen(!isOpen)} style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className={`glass-dark animate-fade-in gesture-guide ${isOpen ? 'is-open' : 'is-collapsed'} ${isMobile ? 'is-mobile' : 'is-desktop'}`}>
+            <div
+                className="gesture-guide-header"
+                onClick={toggleOpen}
+                style={{ cursor: isMobile ? 'pointer' : 'default', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            >
                 <h3 className="gesture-guide-title" style={{ margin: 0 }}>
                     Gesture Controls
                 </h3>
-                <div className="gesture-guide-toggle">
-                    {isOpen ? '✕' : '?'}
-                </div>
+                {isMobile && (
+                    <div className="gesture-guide-toggle">
+                        {isOpen ? '✕' : '?'}
+                    </div>
+                )}
             </div>
 
             {isOpen && (
                 <div className="gesture-guide-list animate-slide-up" style={{ marginTop: 15 }}>
                     {/* Rotate - Fist */}
                     <div className="gesture-guide-item">
+                        {/* ... items ... */}
                         <div className="gesture-guide-icon" style={{ background: '#00f7ff' }}>
                             ✊
                         </div>

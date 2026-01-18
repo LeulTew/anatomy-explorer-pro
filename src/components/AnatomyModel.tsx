@@ -8,50 +8,66 @@ import { SpringSolver } from '../logic/SpringSolver';
 
 // Available models
 // Available models configuration
-export const AVAILABLE_MODELS = [
+export interface ModelConfig {
+    position?: [number, number, number];
+    scale?: number;
+    rotation?: [number, number, number];
+    color?: string;
+    invertRotation?: boolean;
+    boneOffsets?: Record<string, { x?: number; y?: number; z?: number }>;
+    armDangle?: { axis: 'x' | 'y' | 'z'; invert: boolean };
+}
+
+export interface ModelEntry {
+    id: string;
+    name: string;
+    path: string;
+    config: ModelConfig;
+}
+
+export const AVAILABLE_MODELS: ModelEntry[] = [
     {
         id: 'jeny',
         name: 'Jeny',
         path: '/models/jeny.glb',
-        config: { position: [0, -1.0, 0], scale: 1.0, rotation: [0, 0, 0] }
+        config: { position: [0, -1.0, 0], scale: 1.0, rotation: [0, 0, 0], armDangle: { axis: 'z', invert: false } }
     },
     {
         id: 'noelle',
         name: 'Noelle',
         path: '/models/noelle.glb',
-        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
+        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0], armDangle: { axis: 'z', invert: false } }
     },
     {
         id: 'eva',
         name: 'Eva (Base)',
         path: '/models/eva.glb',
-        config: { position: [0, -2.5, 0], scale: 1.0, rotation: [0, 0, 0], color: '#f5d1b5' }
+        config: { position: [0, -2.5, 0], scale: 1.0, rotation: [0, 0, 0], color: '#f5d1b5', armDangle: { axis: 'y', invert: false } }
     },
     {
         id: 'michelle',
         name: 'Michelle',
         path: '/models/michelle.glb',
-        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
+        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0], armDangle: { axis: 'z', invert: false } }
     },
     {
         id: 'seraphina',
         name: 'Seraphina',
         path: '/models/seraphina.glb',
-        // Lowered more as requested (-2.0 -> -2.5)
-        config: { position: [0, -2.5, 0], scale: 0.015, rotation: [0, 0, 0], color: '#f3c4a1' }
+        config: { position: [0, -2.5, 0], scale: 0.015, rotation: [0, 0, 0], color: '#f3c4a1', armDangle: { axis: 'y', invert: false } }
     },
     {
         id: 'isabella',
         name: 'Isabella',
         path: '/models/isabella.glb',
-        // Lowered more as requested (-3.5 -> -4.5)
         config: {
             position: [0, -4.5, 0],
             scale: 2.5,
             rotation: [Math.PI, 0, 0],
             invertRotation: true,
+            armDangle: { axis: 'z', invert: true },
             boneOffsets: {
-                'breast': { x: 0.1, y: -0.2 } // Lower the pivot point for her breasts
+                'breast': { x: 0.1, y: -0.2 }
             }
         }
     },
@@ -59,8 +75,7 @@ export const AVAILABLE_MODELS = [
         id: 'amara',
         name: 'Amara',
         path: '/models/amara.glb',
-        // Lowered more as requested (-2.7 -> -3.2)
-        config: { position: [0, -3.2, 0], scale: 1.0, rotation: [0, 0, 0], color: '#eec1ad' }
+        config: { position: [0, -3.2, 0], scale: 1.0, rotation: [0, 0, 0], color: '#eec1ad', armDangle: { axis: 'y', invert: false } }
     },
 ];
 
@@ -282,6 +297,9 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
 
         // === LOOSE ARM PHYSICS ===
         const armDangleBase = Math.PI / 2.5; // ~72 degrees down
+        const modelConf = AVAILABLE_MODELS.find(m => m.id === modelId)?.config;
+        const armConf = modelConf?.armDangle || { axis: 'z', invert: false };
+
         const armSway = Math.sin(time * 0.8) * 0.08 * movementIntensity;
 
         armLSpring.current.target = armDangleBase + armSway;
@@ -290,27 +308,36 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         const armLValue = armLSpring.current.update(deltaTime);
         const armRValue = armRSpring.current.update(deltaTime);
 
-        // Apply RELATIVE to initial rotations
-        if (armLRef.current && initialRotations.current[armLRef.current.uuid]) {
-            const base = initialRotations.current[armLRef.current.uuid];
-            armLRef.current.rotation.z = base.z + (modelId === 'isabella' ? armLValue : -armLValue);
-        }
-        if (armRRef.current && initialRotations.current[armRRef.current.uuid]) {
-            const base = initialRotations.current[armRRef.current.uuid];
-            armRRef.current.rotation.z = base.z + (modelId === 'isabella' ? -armRValue : armRValue);
-        }
+        // Apply RELATIVE based on specific rig axis
+        const applyArmRot = (bone: THREE.Bone | null, value: number, isRight: boolean) => {
+            if (!bone || !initialRotations.current[bone.uuid]) return;
+            const base = initialRotations.current[bone.uuid];
+
+            // Handle inversion logic
+            const finalVal = (armConf.invert ? -value : value) * (isRight ? 1 : -1);
+
+            if (armConf.axis === 'x') bone.rotation.x = base.x + finalVal;
+            else if (armConf.axis === 'y') bone.rotation.y = base.y + finalVal;
+            else bone.rotation.z = base.z + finalVal;
+        };
+
+        applyArmRot(armLRef.current, armLValue, false);
+        applyArmRot(armRRef.current, armRValue, true);
 
         // Add Shoulder Drop for "loose" look
-        if (shoulderLRef.current && initialRotations.current[shoulderLRef.current.uuid]) {
-            const base = initialRotations.current[shoulderLRef.current.uuid];
-            const drop = 0.15; // Subtle drop
-            shoulderLRef.current.rotation.z = base.z + (modelId === 'isabella' ? drop : -drop);
-        }
-        if (shoulderRRef.current && initialRotations.current[shoulderRRef.current.uuid]) {
-            const base = initialRotations.current[shoulderRRef.current.uuid];
-            const drop = 0.15;
-            shoulderRRef.current.rotation.z = base.z + (modelId === 'isabella' ? -drop : drop);
-        }
+        const drop = 0.15;
+        const applyShoulderRot = (bone: THREE.Bone | null, isRight: boolean) => {
+            if (!bone || !initialRotations.current[bone.uuid]) return;
+            const base = initialRotations.current[bone.uuid];
+            const finalVal = (armConf.invert ? -drop : drop) * (isRight ? 1 : -1);
+
+            if (armConf.axis === 'x') bone.rotation.x = base.x + finalVal;
+            else if (armConf.axis === 'y') bone.rotation.y = base.y + finalVal;
+            else bone.rotation.z = base.z + finalVal;
+        };
+
+        applyShoulderRot(shoulderLRef.current, false);
+        applyShoulderRot(shoulderRRef.current, true);
 
         // Apply to breast bones (or chest as fallback)
         if (breastLRef.current && initialRotations.current[breastLRef.current.uuid]) {
