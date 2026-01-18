@@ -79,29 +79,30 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D> }> = ({ no
             gesture,
             leftChestOffset,
             rightChestOffset,
-            currentMovement,
-            movementIntensity,
-            leftHand,
-            rightHand
+            movementIntensity
         } = useStore.getState();
 
         const time = state.clock.getElapsedTime();
         const deltaTime = time - prevTime.current;
         prevTime.current = time;
 
-        // --- 1. Physics-Based Secondary Motion ---
-        const breathPulse = Math.sin(time * 1.0) * 0.02;
+        // --- Physics Slider effect: Controls jiggle amount and breathing intensity ---
+        const physicsMultiplier = movementIntensity; // 0 to 1
 
-        // Calculate physics force from gesture inputs
-        let leftForce = breathPulse;
-        let rightForce = breathPulse;
+        // --- 1. Breathing Animation (affected by Physics slider) ---
+        const breathAmount = physicsMultiplier * 0.05;
+        const breathCycle = Math.sin(time * 1.5) * breathAmount;
 
-        // Use per-side offsets when interacting
+        // --- 2. Per-Side Chest Physics ---
+        let leftForce = Math.sin(time * 1.0) * 0.02 * physicsMultiplier;
+        let rightForce = Math.sin(time * 1.0) * 0.02 * physicsMultiplier;
+
+        // Apply direct hand control to specific side
         if (gesture === 'INTERACT_LEFT') {
-            leftForce += Math.abs(leftChestOffset.y) * 30.0;
+            leftForce += Math.abs(leftChestOffset.y) * 20.0 * physicsMultiplier;
         }
         if (gesture === 'INTERACT_RIGHT') {
-            rightForce += Math.abs(rightChestOffset.y) * 30.0;
+            rightForce += Math.abs(rightChestOffset.y) * 20.0 * physicsMultiplier;
         }
 
         leftSpring.current.target = leftForce;
@@ -110,85 +111,60 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D> }> = ({ no
         const lValue = leftSpring.current.update(deltaTime);
         const rValue = rightSpring.current.update(deltaTime);
 
-        const bounceAmt = 0.3;
+        const bounceAmt = 0.4 * physicsMultiplier; // Physics slider affects bounce
 
-        // Apply to breast bones
+        // Apply to breast bones (per-side)
         if (breastLRef.current) {
             const base = initialRotations.current[breastLRef.current.uuid];
-            breastLRef.current.rotation.x = base.x + (lValue * bounceAmt);
-            // Direct push from hand
+            let rotation = base.x + (lValue * bounceAmt);
+
+            // Direct push from hand for left side only
             if (gesture === 'INTERACT_LEFT') {
-                breastLRef.current.rotation.x += leftChestOffset.y * 2.0;
+                rotation += leftChestOffset.y * 3.0;
             }
+            breastLRef.current.rotation.x = rotation;
         }
 
         if (breastRRef.current) {
             const base = initialRotations.current[breastRRef.current.uuid];
-            breastRRef.current.rotation.x = base.x + (rValue * bounceAmt);
-            // Direct push from hand
+            let rotation = base.x + (rValue * bounceAmt);
+
+            // Direct push from hand for right side only
             if (gesture === 'INTERACT_RIGHT') {
-                breastRRef.current.rotation.x += rightChestOffset.y * 2.0;
+                rotation += rightChestOffset.y * 3.0;
             }
+            breastRRef.current.rotation.x = rotation;
         }
 
-        // FALLBACK: If NO breast bones, apply physics to the Chest
+        // FALLBACK: If NO breast bones, apply to whole chest
         if (chestRef.current && !breastLRef.current && !breastRRef.current) {
             const base = initialRotations.current[chestRef.current.uuid];
-            const physicsOffset = (lValue + rValue) * 0.15;
-            const breathCycle = Math.sin(time * 1.5) * 0.05 * (0.5 + movementIntensity);
+            const physicsOffset = (lValue + rValue) * 0.15 * physicsMultiplier;
             chestRef.current.rotation.x = base.x + physicsOffset - breathCycle;
 
-            // Per-side interaction for fallback
-            if (gesture === 'INTERACT_LEFT' || gesture === 'INTERACT_RIGHT') {
-                const offset = gesture === 'INTERACT_LEFT' ? leftChestOffset : rightChestOffset;
-                chestRef.current.rotation.x += offset.y * 1.5;
+            // Per-side interaction for fallback (still affects whole chest)
+            if (gesture === 'INTERACT_LEFT') {
+                chestRef.current.rotation.x += leftChestOffset.y * 2.0;
+            }
+            if (gesture === 'INTERACT_RIGHT') {
+                chestRef.current.rotation.x += rightChestOffset.y * 2.0;
             }
         } else if (chestRef.current) {
-            const breathCycle = Math.sin(time * 1.5) * 0.05 * (0.5 + movementIntensity);
+            // Apply breathing to chest even when we have breast bones
             chestRef.current.rotation.x = initialRotations.current[chestRef.current.uuid].x - breathCycle;
         }
 
-        // --- 2. Spine Rotation from ACCUMULATED Rotation ---
+        // --- 3. Spine Rotation from ACCUMULATED Rotation (FIST gesture) ---
         if (spineRef.current) {
             const baseRot = initialRotations.current[spineRef.current.uuid];
 
             // Apply accumulated rotation (horizontal = yaw, vertical = slight tilt)
-            const targetY = baseRot.y + (accumulatedRotation.x * 0.05);
-            const targetZ = baseRot.z - (accumulatedRotation.y * 0.01); // Very small vertical
+            // Increase multiplier for more visible effect
+            const targetY = baseRot.y + (accumulatedRotation.x * 0.1);
+            const targetZ = baseRot.z - (accumulatedRotation.y * 0.02);
 
-            spineRef.current.rotation.y = THREE.MathUtils.lerp(spineRef.current.rotation.y, targetY, 0.1);
-            spineRef.current.rotation.z = THREE.MathUtils.lerp(spineRef.current.rotation.z, targetZ, 0.1);
-        }
-
-        // --- 3. Movement Presets ---
-        if (currentMovement === 'Flex') {
-            const flexAmt = movementIntensity * 1.5;
-
-            if (leftForeArmRef.current && leftArmRef.current) {
-                leftForeArmRef.current.rotation.z = THREE.MathUtils.lerp(leftForeArmRef.current.rotation.z, initialRotations.current[leftForeArmRef.current.uuid].z + flexAmt, 0.1);
-                leftArmRef.current.rotation.z = THREE.MathUtils.lerp(leftArmRef.current.rotation.z, initialRotations.current[leftArmRef.current.uuid].z + 0.5, 0.1);
-            }
-            if (rightForeArmRef.current && rightArmRef.current) {
-                rightForeArmRef.current.rotation.z = THREE.MathUtils.lerp(rightForeArmRef.current.rotation.z, initialRotations.current[rightForeArmRef.current.uuid].z - flexAmt, 0.1);
-                rightArmRef.current.rotation.z = THREE.MathUtils.lerp(rightArmRef.current.rotation.z, initialRotations.current[rightArmRef.current.uuid].z - 0.5, 0.1);
-            }
-        } else if (currentMovement === 'Twist' && spineRef.current) {
-            const twistAmt = Math.sin(time * 2) * movementIntensity;
-            spineRef.current.rotation.y = initialRotations.current[spineRef.current.uuid].y + twistAmt;
-        } else if (currentMovement === 'Breathing') {
-            // Reset arms
-            if (leftForeArmRef.current) leftForeArmRef.current.rotation.z = THREE.MathUtils.lerp(leftForeArmRef.current.rotation.z, initialRotations.current[leftForeArmRef.current.uuid].z, 0.1);
-            if (rightForeArmRef.current) rightForeArmRef.current.rotation.z = THREE.MathUtils.lerp(rightForeArmRef.current.rotation.z, initialRotations.current[rightForeArmRef.current.uuid].z, 0.1);
-
-            // Arm lift based on hand position
-            if (leftHand && leftArmRef.current) {
-                const lift = Math.max(0, (0.5 - leftHand.centroid.y) * 2);
-                leftArmRef.current.rotation.z = THREE.MathUtils.lerp(leftArmRef.current.rotation.z, initialRotations.current[leftArmRef.current.uuid].z + lift, 0.1);
-            }
-            if (rightHand && rightArmRef.current) {
-                const lift = Math.max(0, (0.5 - rightHand.centroid.y) * 2);
-                rightArmRef.current.rotation.z = THREE.MathUtils.lerp(rightArmRef.current.rotation.z, initialRotations.current[rightArmRef.current.uuid].z - lift, 0.1);
-            }
+            spineRef.current.rotation.y = THREE.MathUtils.lerp(spineRef.current.rotation.y, targetY, 0.15);
+            spineRef.current.rotation.z = THREE.MathUtils.lerp(spineRef.current.rotation.z, targetZ, 0.15);
         }
     });
 

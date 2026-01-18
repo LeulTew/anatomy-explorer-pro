@@ -36,13 +36,19 @@ export class GestureRecognizer {
             return tipDist < pipDist;
         };
 
-        // Check Middle (12), Ring (16), Pinky (20)
-        // Indices PIP are: Middle(10), Ring(14), Pinky(18)
-        return isCurled(12, 10) && isCurled(16, 14) && isCurled(20, 18);
+        // Check ALL 4 fingers being curled for a proper fist
+        // Index (8, PIP 6), Middle (12, PIP 10), Ring (16, PIP 14), Pinky (20, PIP 18)
+        const indexCurled = isCurled(8, 6);
+        const middleCurled = isCurled(12, 10);
+        const ringCurled = isCurled(16, 14);
+        const pinkyCurled = isCurled(20, 18);
+
+        // Require at least 3 fingers curled for a fist (more lenient)
+        const curledCount = [indexCurled, middleCurled, ringCurled, pinkyCurled].filter(Boolean).length;
+        return curledCount >= 3;
     }
 
     static isOpen(keypoints: Point[]): boolean {
-        // opposite of grab - fingers extended
         if (!keypoints || keypoints.length < REQUIRED_KEYPOINTS) return false;
 
         const isExtended = (tipIdx: number, pipIdx: number): boolean => {
@@ -51,17 +57,22 @@ export class GestureRecognizer {
             const wrist = keypoints[WRIST];
             if (!tip || !pip || !wrist) return false;
 
-            // Tip further from wrist than PIP = Extended
             return this.calculateDistance(tip, wrist) > this.calculateDistance(pip, wrist);
         };
 
-        // Check if at least 3 fingers are extended (including Index)
-        return isExtended(8, 6) && isExtended(12, 10) && isExtended(16, 14);
+        // Check ALL 4 fingers extended for an open hand
+        const indexExtended = isExtended(8, 6);
+        const middleExtended = isExtended(12, 10);
+        const ringExtended = isExtended(16, 14);
+        const pinkyExtended = isExtended(20, 18);
+
+        // Require at least 3 fingers extended for open hand
+        const extendedCount = [indexExtended, middleExtended, ringExtended, pinkyExtended].filter(Boolean).length;
+        return extendedCount >= 3;
     }
 
     static analyzeHand(keypoints: Point[], handedness: 'Left' | 'Right'): Hand | null {
         if (!keypoints || keypoints.length < REQUIRED_KEYPOINTS) {
-            console.warn('GestureRecognizer: Invalid keypoints received');
             return null;
         }
 
@@ -70,7 +81,6 @@ export class GestureRecognizer {
         const p17 = keypoints[17];
 
         if (!p0 || !p5 || !p17) {
-            console.warn('GestureRecognizer: Missing required keypoints for centroid');
             return null;
         }
 
