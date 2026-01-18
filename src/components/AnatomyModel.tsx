@@ -56,17 +56,17 @@ const analyzeBones = (nodes: Record<string, THREE.Object3D>, modelName: string):
         allBoneNames: boneNames
     };
 
-    // Log analysis
-    console.log(`\n=== BONE ANALYSIS: ${modelName} ===`);
-    console.log('Bones found:', boneNames.length);
-    console.log('Spine:', analysis.hasSpine ? '✓' : '✗');
-    console.log('Hips:', analysis.hasHips ? '✓' : '✗');
-    console.log('Chest:', analysis.hasChest ? '✓' : '✗');
-    console.log('Breast L:', analysis.hasBreastL ? '✓' : '✗');
-    console.log('Breast R:', analysis.hasBreastR ? '✓' : '✗');
-    console.log('Butt L:', analysis.hasButtL ? '✓' : '✗');
-    console.log('Butt R:', analysis.hasButtR ? '✓' : '✗');
-    console.log('All bones:', boneNames.join(', '));
+    // Clean log - only important bones for jiggle physics (easy to copy-paste)
+    console.log(`
+=== ${modelName} BONES ===
+Hips: ${boneNames.filter(b => b.toLowerCase().includes('hip') || b.toLowerCase().includes('pelvis')).join(', ') || 'NONE'}
+Spine: ${boneNames.filter(b => b.toLowerCase().includes('spine')).join(', ') || 'NONE'}
+Chest: ${boneNames.filter(b => b.toLowerCase().includes('chest') || b.toLowerCase().includes('sternum')).join(', ') || 'NONE'}
+Breast: ${boneNames.filter(b => b.toLowerCase().includes('breast') || b.toLowerCase().includes('boob') || b.toLowerCase().includes('pectoral')).join(', ') || 'NONE'}
+Butt/Glute: ${boneNames.filter(b => b.toLowerCase().includes('butt') || b.toLowerCase().includes('glute')).join(', ') || 'NONE'}
+UpperLeg: ${boneNames.filter(b => b.toLowerCase().includes('upleg') || b.toLowerCase().includes('thigh')).join(', ') || 'NONE'}
+=========================
+`);
 
     return analysis;
 };
@@ -224,56 +224,81 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             }
         }
 
-        // === BACK VIEW: GLUTE MOVEMENT (TWERK) ===
-        if (isBackView && isInteracting) {
-            const swayForce = interactOffset.x * 25.0 * physicsMultiplier;
-            const jiggleForce = Math.abs(interactOffset.y) * 20.0 * physicsMultiplier;
+        // === BACK VIEW: PER-SIDE GLUTE MOVEMENT ===
+        // Left hand = left side, Right hand = right side
+        const isLeftInteracting = isBackView && gesture === 'INTERACT_LEFT';
+        const isRightInteracting = isBackView && gesture === 'INTERACT_RIGHT';
 
-            leftHipSpring.current.target = swayForce + jiggleForce;
-            rightHipSpring.current.target = -swayForce + jiggleForce;
+        if (isLeftInteracting) {
+            const force = Math.abs(leftChestOffset.y) * 25.0 * physicsMultiplier + leftChestOffset.x * 20.0 * physicsMultiplier;
+            leftHipSpring.current.target = force;
         } else {
             leftHipSpring.current.target = Math.sin(time * 2) * 0.01 * physicsMultiplier;
+        }
+
+        if (isRightInteracting) {
+            const force = Math.abs(rightChestOffset.y) * 25.0 * physicsMultiplier + rightChestOffset.x * 20.0 * physicsMultiplier;
+            rightHipSpring.current.target = force;
+        } else {
             rightHipSpring.current.target = Math.sin(time * 2 + 0.2) * 0.01 * physicsMultiplier;
         }
 
         const leftHipValue = leftHipSpring.current.update(deltaTime);
         const rightHipValue = rightHipSpring.current.update(deltaTime);
 
-        // Apply to hip/butt bones - MAIN TWERK EFFECT
-        if (hipsRef.current && initialRotations.current[hipsRef.current.uuid] && isBackView && isInteracting) {
+        // Apply to hip bone for overall movement
+        if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
             const base = initialRotations.current[hipsRef.current.uuid];
-            // Strong side-to-side tilt and twist for twerk effect
-            hipsRef.current.rotation.z = base.z + interactOffset.x * 0.8;
-            hipsRef.current.rotation.y = base.y + interactOffset.x * 0.3;
-            // Also add forward/back tilt based on Y
-            hipsRef.current.rotation.x = base.x + interactOffset.y * 0.5;
-        } else if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
-            const base = initialRotations.current[hipsRef.current.uuid];
-            hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
-            hipsRef.current.rotation.y = THREE.MathUtils.lerp(hipsRef.current.rotation.y, base.y, 0.1);
-            hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
+            if (isLeftInteracting) {
+                // Tilt to left side
+                hipsRef.current.rotation.z = base.z + leftChestOffset.x * 0.6;
+                hipsRef.current.rotation.x = base.x + leftChestOffset.y * 0.4;
+            } else if (isRightInteracting) {
+                // Tilt to right side
+                hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6;
+                hipsRef.current.rotation.x = base.x + rightChestOffset.y * 0.4;
+            } else {
+                hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
+                hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
+            }
         }
 
-        // Butt bones jiggle
+        // Left butt/glute bone - only moves with LEFT hand
         if (buttLRef.current && initialRotations.current[buttLRef.current.uuid]) {
             const base = initialRotations.current[buttLRef.current.uuid];
-            buttLRef.current.rotation.x = base.x + leftHipValue * 0.4;
+            if (isLeftInteracting) {
+                buttLRef.current.rotation.x = base.x + leftHipValue * 0.5 + leftChestOffset.y * 1.5;
+            } else {
+                buttLRef.current.rotation.x = THREE.MathUtils.lerp(buttLRef.current.rotation.x, base.x, 0.1);
+            }
         }
 
+        // Right butt/glute bone - only moves with RIGHT hand
         if (buttRRef.current && initialRotations.current[buttRRef.current.uuid]) {
             const base = initialRotations.current[buttRRef.current.uuid];
-            buttRRef.current.rotation.x = base.x + rightHipValue * 0.4;
+            if (isRightInteracting) {
+                buttRRef.current.rotation.x = base.x + rightHipValue * 0.5 + rightChestOffset.y * 1.5;
+            } else {
+                buttRRef.current.rotation.x = THREE.MathUtils.lerp(buttRRef.current.rotation.x, base.x, 0.1);
+            }
         }
 
-        // Upper leg as fallback for butt movement
-        if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isBackView && isInteracting) {
+        // Upper leg fallback - LEFT side only for left hand
+        if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isLeftInteracting) {
             const base = initialRotations.current[upperLegLRef.current.uuid];
-            upperLegLRef.current.rotation.z = base.z + leftHipValue * 0.15;
+            upperLegLRef.current.rotation.z = base.z + leftHipValue * 0.2 + leftChestOffset.y * 0.3;
+        } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+            const base = initialRotations.current[upperLegLRef.current.uuid];
+            upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
         }
 
-        if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isBackView && isInteracting) {
+        // Upper leg fallback - RIGHT side only for right hand
+        if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isRightInteracting) {
             const base = initialRotations.current[upperLegRRef.current.uuid];
-            upperLegRRef.current.rotation.z = base.z + rightHipValue * 0.15;
+            upperLegRRef.current.rotation.z = base.z + rightHipValue * 0.2 + rightChestOffset.y * 0.3;
+        } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+            const base = initialRotations.current[upperLegRRef.current.uuid];
+            upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
         }
     });
 
