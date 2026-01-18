@@ -12,6 +12,8 @@ export const AVAILABLE_MODELS = [
     { id: 'christmas', name: 'Christmas Girl', path: '/models/christmas_girl.glb' },
     { id: 'base_mesh', name: 'Base Mesh Female', path: '/models/base_mesh_female_with_rig_and_textures.glb' },
     { id: 'michelle', name: 'Michelle (Standard)', path: '/models/michelle.glb' },
+    { id: 'seraphina', name: 'Seraphina', path: '/models/seraphina.glb' },
+    { id: 'isabella', name: 'Isabella', path: '/models/isabella.glb' },
 ];
 
 // Bone analysis result type
@@ -394,12 +396,12 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
     });
 
     // Lower specific models to center hips at (0,0,0)
-    // Jeny is perfect at -1.0. Others need to be lower as their origin seems to be at feet/lower.
-    let yOffset = -1.0;
-    if (modelId === 'base_mesh') yOffset = -2.5; // Drastic lower as user report feet at center
-    else if (modelId === 'michelle' || modelId === 'christmas') yOffset = -1.6;
-
-    // Use default -1.0 for Jeny
+    // Jeny is perfect at -1.0. 
+    // Base Mesh needs drastic lowering (-2.5).
+    // Others (Michelle, Seraphina, Isabella) usually need -1.6.
+    let yOffset = -1.6; // Default for most models
+    if (modelId === 'jeny') yOffset = -1.0;
+    else if (modelId === 'base_mesh') yOffset = -2.5;
 
 
     return (
