@@ -120,7 +120,7 @@ UpperLeg: ${boneNames.filter(b => b.toLowerCase().includes('upleg') || b.toLower
  * Front view: chest movement
  * Back view: glute movement
  */
-const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string, modelId?: string }> = ({ nodes, modelName, modelId }) => {
+const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string }> = ({ nodes, modelName }) => {
     // Core bones
     const hipsRef = useRef<THREE.Bone | null>(null);
     const chestRef = useRef<THREE.Bone | null>(null);
@@ -289,15 +289,19 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             } else {
                 chestRef.current.rotation.x = base.x - breathCycle;
             }
+        }
 
-            // === BACK VIEW: PER-SIDE GLUTE MOVEMENT ===
-            // When facing BACK: viewer's left hand = model's RIGHT side (mirrored)
-            // So: left hand gesture should control RIGHT leg/butt
-            const isLeftInteracting = isBackView && gesture === 'INTERACT_LEFT';
-            const isRightInteracting = isBackView && gesture === 'INTERACT_RIGHT';
+        // === BACK VIEW: PER-SIDE GLUTE MOVEMENT ===
+        // When facing BACK: viewer's left hand = model's RIGHT side (mirrored)
+        // So: left hand gesture should control RIGHT leg/butt
+        const isLeftInteracting = isBackView && gesture === 'INTERACT_LEFT';
+        const isRightInteracting = isBackView && gesture === 'INTERACT_RIGHT';
 
-            // For back view: SWAP sides - left hand gesture → model's RIGHT side
-            // Because when facing away, model's right is on viewer's LEFT
+        const leftHipValue = leftHipSpring.current.update(deltaTime);
+        const rightHipValue = rightHipSpring.current.update(deltaTime);
+
+        // Because when facing away, model's right is on viewer's LEFT
+        if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
             if (isLeftInteracting) {
                 // Left hand controls RIGHT side spring
                 const force = Math.abs(leftChestOffset.y) * 25.0 * physicsMultiplier + leftChestOffset.x * 20.0 * physicsMultiplier;
@@ -314,116 +318,112 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
                 leftHipSpring.current.target = Math.sin(time * 2) * 0.01 * physicsMultiplier;
             }
 
-            const leftHipValue = leftHipSpring.current.update(deltaTime);
-            const rightHipValue = rightHipSpring.current.update(deltaTime);
-
             // Apply to hip bone for overall movement
-            if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
-                const base = initialRotations.current[hipsRef.current.uuid];
-                if (isLeftInteracting) {
-                    // Left hand → tilt model's RIGHT side (viewer's left)
-                    // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
-                    const mult = (!buttLRef.current) ? 2.5 : 1.0; // Strong multiplication for visibility
-                    const tiltZ = -leftChestOffset.x * 0.8 * mult;
-                    const tiltX = leftChestOffset.y * 0.5 * mult;
+            const base = initialRotations.current[hipsRef.current.uuid];
+            if (isLeftInteracting) {
+                // Left hand → tilt model's RIGHT side (viewer's left)
+                // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
+                const mult = (!buttLRef.current) ? 2.5 : 1.0; // Strong multiplication for visibility
+                const tiltZ = -leftChestOffset.x * 0.8 * mult;
+                const tiltX = leftChestOffset.y * 0.5 * mult;
 
-                    hipsRef.current.rotation.z = base.z + tiltZ;
-                    hipsRef.current.rotation.x = base.x + tiltX;
+                hipsRef.current.rotation.z = base.z + tiltZ;
+                hipsRef.current.rotation.x = base.x + tiltX;
 
-                    // COUNTER-ROTATION: Isolate movement by rotating chest and legs opposite direction
-                    if (!buttLRef.current) {
-                        if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
-                            const cBase = initialRotations.current[chestRef.current.uuid];
-                            chestRef.current.rotation.z = cBase.z - tiltZ; // Counter logic
-                            chestRef.current.rotation.x = cBase.x - tiltX;
-                        }
-                        if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
-                            const lBase = initialRotations.current[upperLegLRef.current.uuid];
-                            upperLegLRef.current.rotation.z = lBase.z - tiltZ; // Legs opposite to Hips to stay vertical
-                        }
-                        if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-                            const rBase = initialRotations.current[upperLegRRef.current.uuid];
-                            // Stabilize both legs
-                            upperLegRRef.current.rotation.z = rBase.z - tiltZ;
-                        }
+                // COUNTER-ROTATION: Isolate movement by rotating chest and legs opposite direction
+                if (!buttLRef.current) {
+                    if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
+                        const cBase = initialRotations.current[chestRef.current.uuid];
+                        chestRef.current.rotation.z = cBase.z - tiltZ; // Counter logic
+                        chestRef.current.rotation.x = cBase.x - tiltX;
                     }
-                } else if (isRightInteracting) {
-                    // Right hand → tilt model's LEFT side (viewer's right)
-                    const mult = (!buttRRef.current) ? 2.5 : 1.0;
-                    const tiltZ = rightChestOffset.x * 0.8 * mult;
-                    const tiltX = rightChestOffset.y * 0.5 * mult;
-
-                    hipsRef.current.rotation.z = base.z + tiltZ;
-                    hipsRef.current.rotation.x = base.x + tiltX;
-
-                    // COUNTER-ROTATION
-                    if (!buttRRef.current) {
-                        if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
-                            const cBase = initialRotations.current[chestRef.current.uuid];
-                            chestRef.current.rotation.z = cBase.z - tiltZ;
-                            chestRef.current.rotation.x = cBase.x - tiltX;
-                        }
-                        if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-                            const rBase = initialRotations.current[upperLegRRef.current.uuid];
-                            upperLegRRef.current.rotation.z = rBase.z - tiltZ;
-                        }
-                        if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
-                            const lBase = initialRotations.current[upperLegLRef.current.uuid];
-                            upperLegLRef.current.rotation.z = lBase.z - tiltZ;
-                        }
+                    if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+                        const lBase = initialRotations.current[upperLegLRef.current.uuid];
+                        upperLegLRef.current.rotation.z = lBase.z - tiltZ; // Legs opposite to Hips to stay vertical
                     }
-                } else {
-                    hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
-                    hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
+                    if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+                        const rBase = initialRotations.current[upperLegRRef.current.uuid];
+                        // Stabilize both legs
+                        upperLegRRef.current.rotation.z = rBase.z - tiltZ;
+                    }
                 }
-            }
+            } else if (isRightInteracting) {
+                // Right hand → tilt model's LEFT side (viewer's right)
+                const mult = (!buttRRef.current) ? 2.5 : 1.0;
+                const tiltZ = rightChestOffset.x * 0.8 * mult;
+                const tiltX = rightChestOffset.y * 0.5 * mult;
 
-            // Model's LEFT butt/leg - controlled by RIGHT hand (SWAPPED)
-            if (buttLRef.current && initialRotations.current[buttLRef.current.uuid]) {
-                const base = initialRotations.current[buttLRef.current.uuid];
-                if (isRightInteracting) {
-                    buttLRef.current.rotation.x = base.x + leftHipValue * 0.5 + rightChestOffset.y * 1.5;
-                } else {
-                    buttLRef.current.rotation.x = THREE.MathUtils.lerp(buttLRef.current.rotation.x, base.x, 0.1);
+                hipsRef.current.rotation.z = base.z + tiltZ;
+                hipsRef.current.rotation.x = base.x + tiltX;
+
+                // COUNTER-ROTATION
+                if (!buttRRef.current) {
+                    if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
+                        const cBase = initialRotations.current[chestRef.current.uuid];
+                        chestRef.current.rotation.z = cBase.z - tiltZ;
+                        chestRef.current.rotation.x = cBase.x - tiltX;
+                    }
+                    if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+                        const rBase = initialRotations.current[upperLegRRef.current.uuid];
+                        upperLegRRef.current.rotation.z = rBase.z - tiltZ;
+                    }
+                    if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+                        const lBase = initialRotations.current[upperLegLRef.current.uuid];
+                        upperLegLRef.current.rotation.z = lBase.z - tiltZ;
+                    }
                 }
+            } else {
+                hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
+                hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
             }
+        }
 
-            // Model's RIGHT butt/leg - controlled by LEFT hand (SWAPPED)
-            if (buttRRef.current && initialRotations.current[buttRRef.current.uuid]) {
-                const base = initialRotations.current[buttRRef.current.uuid];
-                if (isLeftInteracting) {
-                    buttRRef.current.rotation.x = base.x + rightHipValue * 0.5 + leftChestOffset.y * 1.5;
-                } else {
-                    buttRRef.current.rotation.x = THREE.MathUtils.lerp(buttRRef.current.rotation.x, base.x, 0.1);
-                }
+        // Model's LEFT butt/leg - controlled by RIGHT hand (SWAPPED)
+        if (buttLRef.current && initialRotations.current[buttLRef.current.uuid]) {
+            const base = initialRotations.current[buttLRef.current.uuid];
+            if (isRightInteracting) {
+                buttLRef.current.rotation.x = base.x + leftHipValue * 0.5 + rightChestOffset.y * 1.5;
+            } else {
+                buttLRef.current.rotation.x = THREE.MathUtils.lerp(buttLRef.current.rotation.x, base.x, 0.1);
             }
+        }
 
-            // Upper leg fallback - Model's LEFT leg - controlled by RIGHT hand (SWAPPED)
-            if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isRightInteracting) {
-                const base = initialRotations.current[upperLegLRef.current.uuid];
-                // REDUCED LEG SWING - User feedback: "legs moving not ass"
-                // We use minimal leg swing and rely on the enhanced hip movement above
-                upperLegLRef.current.rotation.z = base.z + (leftHipValue * 0.05) + (rightChestOffset.y * 0.08);
-                // Add slight twist for better look?
-                upperLegLRef.current.rotation.y = base.y - rightChestOffset.x * 0.1;
-            } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
-                const base = initialRotations.current[upperLegLRef.current.uuid];
-                upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
+        // Model's RIGHT butt/leg - controlled by LEFT hand (SWAPPED)
+        if (buttRRef.current && initialRotations.current[buttRRef.current.uuid]) {
+            const base = initialRotations.current[buttRRef.current.uuid];
+            if (isLeftInteracting) {
+                buttRRef.current.rotation.x = base.x + rightHipValue * 0.5 + leftChestOffset.y * 1.5;
+            } else {
+                buttRRef.current.rotation.x = THREE.MathUtils.lerp(buttRRef.current.rotation.x, base.x, 0.1);
             }
+        }
 
-            // Upper leg fallback - Model's RIGHT leg - controlled by LEFT hand (SWAPPED)
-            if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isLeftInteracting) {
-                const base = initialRotations.current[upperLegRRef.current.uuid];
-                // REDUCED LEG SWING - User feedback: "legs moving not ass"
-                // We use minimal leg swing and rely on the enhanced hip movement above
-                upperLegRRef.current.rotation.z = base.z + (rightHipValue * 0.05) + (leftChestOffset.y * 0.08);
-                // Add slight twist for better look?
-                upperLegRRef.current.rotation.y = base.y + leftChestOffset.x * 0.1;
-            } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-                const base = initialRotations.current[upperLegRRef.current.uuid];
-                upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
-            }
-        });
+        // Upper leg fallback - Model's LEFT leg - controlled by RIGHT hand (SWAPPED)
+        if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isRightInteracting) {
+            const base = initialRotations.current[upperLegLRef.current.uuid];
+            // REDUCED LEG SWING - User feedback: "legs moving not ass"
+            // We use minimal leg swing and rely on the enhanced hip movement above
+            upperLegLRef.current.rotation.z = base.z + (leftHipValue * 0.05) + (rightChestOffset.y * 0.08);
+            // Add slight twist for better look?
+            upperLegLRef.current.rotation.y = base.y - rightChestOffset.x * 0.1;
+        } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+            const base = initialRotations.current[upperLegLRef.current.uuid];
+            upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
+        }
+
+        // Upper leg fallback - Model's RIGHT leg - controlled by LEFT hand (SWAPPED)
+        if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isLeftInteracting) {
+            const base = initialRotations.current[upperLegRRef.current.uuid];
+            // REDUCED LEG SWING - User feedback: "legs moving not ass"
+            // We use minimal leg swing and rely on the enhanced hip movement above
+            upperLegRRef.current.rotation.z = base.z + (rightHipValue * 0.05) + (leftChestOffset.y * 0.08);
+            // Add slight twist for better look?
+            upperLegRRef.current.rotation.y = base.y + leftChestOffset.x * 0.1;
+        } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+            const base = initialRotations.current[upperLegRRef.current.uuid];
+            upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
+        }
+    });
 
     return <group>{/* RigController */}</group>;
 };
@@ -491,7 +491,7 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
     return (
         <group ref={groupRef} dispose={null} position={[pos[0], pos[1], pos[2]]}>
             <primitive object={clone} />
-            <RigController nodes={nodes} modelName={modelName} modelId={modelId} />
+            <RigController nodes={nodes} modelName={modelName} />
         </group>
     );
 };
