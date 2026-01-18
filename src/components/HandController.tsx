@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Hands, type Results } from '@mediapipe/hands';
 import { Camera } from '@mediapipe/camera_utils';
-import { useStore, type Hand } from '../store/useStore';
+import { useStore, type Hand, type GestureType } from '../store/useStore';
 import { GestureRecognizer } from '../logic/GestureRecognizer';
 
 // Module-level singleton to prevent React Strict Mode from creating multiple WASM instances
@@ -21,11 +21,9 @@ async function getOrCreateHands(): Promise<Hands | null> {
     }
 
     // Start new initialization
-    // Start new initialization
     isInitializing = true;
     initializationPromise = (async () => {
         try {
-            // console.log('Creating new Hands instance (Local)...');
             const hands = new Hands({
                 locateFile: (file) => `/mediapipe/${file}`
             });
@@ -37,7 +35,6 @@ async function getOrCreateHands(): Promise<Hands | null> {
             );
 
             await Promise.race([initPromise, timeoutPromise]);
-            // console.log('MediaPipe Hands initialized successfully');
 
             hands.setOptions({
                 maxNumHands: 2,
@@ -48,8 +45,7 @@ async function getOrCreateHands(): Promise<Hands | null> {
 
             globalHandsInstance = hands;
             return hands;
-        } catch (error) {
-            // console.error('Failed to initialize MediaPipe:', error);
+        } catch {
             return null;
         } finally {
             isInitializing = false;
@@ -68,7 +64,8 @@ const HandController: React.FC = () => {
     const updateHandsRef = useRef(useStore.getState().updateHands);
     const setModelLoadedRef = useRef(useStore.getState().setModelLoaded);
 
-    // Refs for gesture tracking (moved from GestureManager)
+    // Refs for gesture tracking
+    const prevLeftCentroid = useRef<{ x: number, y: number } | null>(null);
     const prevRightCentroid = useRef<{ x: number, y: number } | null>(null);
     const prevDist = useRef<number | null>(null);
     const lastUpdateRef = useRef<number>(0);
@@ -82,33 +79,26 @@ const HandController: React.FC = () => {
         let loadingTimeout: ReturnType<typeof setTimeout>;
 
         const initializeMediaPipe = async () => {
-            // console.log('HandController: Starting initialization...');
-
-            // Long timeout - just a safety net, not expected to fire normally
+            // Long timeout - just a safety net
             loadingTimeout = setTimeout(() => {
                 if (isActive) {
-                    // console.warn('Loading timeout reached (15s) - dismissing loading screen as fallback');
                     useStore.getState().setModelLoaded(true);
                 }
             }, 15000);
 
             try {
-                // Use singleton to prevent WASM corruption from Strict Mode
-                // console.log('Waiting for MediaPipe singleton...');
                 const hands = await getOrCreateHands();
-                // console.log('Got hands:', !!hands);
 
                 clearTimeout(loadingTimeout);
 
                 if (!hands) {
-                    // console.error('Failed to get Hands instance');
                     useStore.getState().setModelLoaded(true);
                     return;
                 }
 
                 if (!isActive) return;
 
-                // Setup callbacks (safe to call multiple times)
+                // Setup callbacks
                 let hasReportedReady = false;
                 hands.onResults((results: Results) => {
                     if (!hasReportedReady) {
@@ -136,17 +126,16 @@ const HandController: React.FC = () => {
                         }
                     }
 
-                    // --- Integrated Gesture Logic (Prevents Update Depth Loops) ---
-                    // Instead of a separate component reacting to store changes, we process inputs here
-                    // and apply a single batched update to the store.
-
+                    // --- Gesture Processing Logic ---
                     const state = useStore.getState();
-                    let currentGesture: 'IDLE' | 'ROTATE' | 'ZOOM_IN' | 'ZOOM_OUT' | 'PAN' | 'INTERACT' = 'IDLE';
+                    let currentGesture: GestureType = 'IDLE';
                     let newZoom = state.zoomFactor;
                     let rotationDelta = { x: 0, y: 0 };
+                    let leftChestDelta = { x: 0, y: 0 };
+                    let rightChestDelta = { x: 0, y: 0 };
 
+                    // PRIORITY 1: Two Hands = Zoom
                     if (leftHand && rightHand) {
-                        // Two hands = Zoom
                         const dist = GestureRecognizer.calculateDistance(leftHand.centroid, rightHand.centroid);
                         if (prevDist.current !== null) {
                             const delta = dist - prevDist.current;
@@ -157,79 +146,103 @@ const HandController: React.FC = () => {
                             }
                         }
                         prevDist.current = dist;
+                        // Reset single-hand centroids when zooming
+                        prevLeftCentroid.current = null;
+                        prevRightCentroid.current = null;
                     } else {
                         prevDist.current = null;
                     }
 
-                    const activeHand = rightHand || leftHand;
+                    // PRIORITY 2: Single Hand Gestures (if not zooming)
+                    if (currentGesture === 'IDLE') {
 
-                    if (currentGesture === 'IDLE' && activeHand) {
-                        const current = activeHand.centroid;
+                        // RIGHT HAND ONLY
+                        if (rightHand && !leftHand) {
+                            const current = rightHand.centroid;
 
-                        if (activeHand.isGrabbing) {
-                            // Fist = Rotate (Either Hand)
-                            currentGesture = 'ROTATE';
-                            if (prevRightCentroid.current) {
-                                const deltaX = current.x - prevRightCentroid.current.x;
-                                const deltaY = current.y - prevRightCentroid.current.y;
-                                rotationDelta = { x: deltaX, y: deltaY };
+                            if (rightHand.isGrabbing) {
+                                // FIST = ROTATE
+                                currentGesture = 'ROTATE';
+                                if (prevRightCentroid.current) {
+                                    const deltaX = current.x - prevRightCentroid.current.x;
+                                    const deltaY = current.y - prevRightCentroid.current.y;
+                                    // Horizontal = full, Vertical = 20% (slight tilt)
+                                    rotationDelta = { x: deltaX, y: deltaY * 0.2 };
+                                }
+                            } else if (rightHand.isOpen) {
+                                // OPEN HAND = INTERACT RIGHT CHEST
+                                currentGesture = 'INTERACT_RIGHT';
+                                if (prevRightCentroid.current) {
+                                    const deltaX = current.x - prevRightCentroid.current.x;
+                                    const deltaY = current.y - prevRightCentroid.current.y;
+                                    rightChestDelta = { x: deltaX, y: deltaY };
+                                }
                             }
-                        } else if (activeHand.isOpen) {
-                            // Open Hand = Interact (Chest Move)
-                            currentGesture = 'INTERACT';
-                            if (prevRightCentroid.current) {
-                                const deltaX = current.x - prevRightCentroid.current.x;
-                                const deltaY = current.y - prevRightCentroid.current.y;
-                                rotationDelta = { x: deltaX, y: deltaY };
-                            }
+                            prevRightCentroid.current = current;
+                        } else {
+                            prevRightCentroid.current = null;
                         }
 
-                        prevRightCentroid.current = current;
-                    } else {
-                        // Reset if no active hand
-                        prevRightCentroid.current = null;
+                        // LEFT HAND ONLY
+                        if (leftHand && !rightHand) {
+                            const current = leftHand.centroid;
+
+                            if (leftHand.isGrabbing) {
+                                // FIST = ROTATE (also works with left hand)
+                                currentGesture = 'ROTATE';
+                                if (prevLeftCentroid.current) {
+                                    const deltaX = current.x - prevLeftCentroid.current.x;
+                                    const deltaY = current.y - prevLeftCentroid.current.y;
+                                    rotationDelta = { x: deltaX, y: deltaY * 0.2 };
+                                }
+                            } else if (leftHand.isOpen) {
+                                // OPEN HAND = INTERACT LEFT CHEST
+                                currentGesture = 'INTERACT_LEFT';
+                                if (prevLeftCentroid.current) {
+                                    const deltaX = current.x - prevLeftCentroid.current.x;
+                                    const deltaY = current.y - prevLeftCentroid.current.y;
+                                    leftChestDelta = { x: deltaX, y: deltaY };
+                                }
+                            }
+                            prevLeftCentroid.current = current;
+                        } else {
+                            prevLeftCentroid.current = null;
+                        }
                     }
 
-                    // Direct store update (Throttled to ~30fps to prevent React loop)
+                    // Throttle store updates (~30fps)
                     const now = performance.now();
-                    // Use a static ref for timing if possible, but here we can use a closure variable if defined outside
-                    // Actually, we can just use a simple frame skip or check relative change?
-                    // Better: just check if we really need to update.
-
-                    // Ideally we should use a ref for lastUpdate time.
-                    // Let's add that to the component scope refs.
-
-                    // For now, let's just use requestAnimationFrame batching? No, setState is already batched.
-                    // The issue is likely the sheer frequency.
-                    // Let's modify the onResults callback to use a ref for throttling.
-
-                    // See 'lastUpdateRef' added to component below.
-                    if (now - lastUpdateRef.current > 32) { // ~30fps
+                    if (now - lastUpdateRef.current > 32) {
                         lastUpdateRef.current = now;
+
+                        // Apply rotation delta to accumulator if rotating
+                        if (currentGesture === 'ROTATE') {
+                            useStore.getState().applyRotationDelta(rotationDelta);
+                        }
+
                         useStore.setState({
                             leftHand,
                             rightHand,
                             gesture: currentGesture,
                             zoomFactor: newZoom,
-                            rotationDelta: rotationDelta
+                            rotationDelta: rotationDelta,
+                            leftChestOffset: currentGesture === 'INTERACT_LEFT' ? leftChestDelta : { x: 0, y: 0 },
+                            rightChestOffset: currentGesture === 'INTERACT_RIGHT' ? rightChestDelta : { x: 0, y: 0 }
                         });
                     }
                 });
 
                 handsRef.current = hands;
 
-                // 4. Start Camera only after hands is ready
+                // Start Camera after hands is ready
                 if (videoRef.current) {
-                    // ... continues as before
-                    // console.log('Starting camera...');
                     const camera = new Camera(videoRef.current, {
                         onFrame: async () => {
-                            // Only send if active and hands instance exists
                             if (isActive && videoRef.current && handsRef.current) {
                                 try {
                                     await handsRef.current.send({ image: videoRef.current });
-                                } catch (e) {
-                                    // console.error('MediaPipe send error:', e);
+                                } catch {
+                                    // Silently ignore send errors
                                 }
                             }
                         },
@@ -239,12 +252,9 @@ const HandController: React.FC = () => {
 
                     cameraRef.current = camera;
                     await camera.start();
-                    // console.log('Camera started successfully');
                 }
 
-            } catch (error) {
-                // console.error('Initialization error:', error);
-                // Dismiss loading screen on error so app is usable (just without hands)
+            } catch {
                 useStore.getState().setModelLoaded(true);
             }
         };
@@ -268,7 +278,6 @@ const HandController: React.FC = () => {
             cameraRef.current.start().catch(() => { });
         } else {
             cameraRef.current.stop();
-            // Clear hands when camera is off
             updateHandsRef.current(null, null);
         }
     }, [isCameraActive]);

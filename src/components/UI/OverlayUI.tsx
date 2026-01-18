@@ -49,7 +49,7 @@ const SubscriptionOverlay: React.FC = () => {
 const StudioControls: React.FC = () => {
     const movementIntensity = useStore(state => state.movementIntensity);
     const setMovementIntensity = useStore(state => state.setMovementIntensity);
-    const setRotationDelta = useStore(state => state.setRotationDelta);
+    const resetView = useStore(state => state.resetView);
 
     return (
         <div className="glass-dark animate-slide-up" style={{
@@ -60,13 +60,13 @@ const StudioControls: React.FC = () => {
             background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)'
         }}>
 
-            {/* Dynamics / Physics Control */}
+            {/* Physics Intensity Control */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
                 <span style={{
                     fontSize: '0.7rem', color: '#888', letterSpacing: '1.5px', fontWeight: 600,
                     textTransform: 'uppercase'
                 }}>
-                    Dynamics
+                    Physics
                 </span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: '0.7rem', color: '#555' }}>Off</span>
@@ -82,9 +82,9 @@ const StudioControls: React.FC = () => {
 
             <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.1)' }} />
 
-            {/* System Actions */}
+            {/* Reset View Button - Now calls resetView() */}
             <button
-                onClick={() => setRotationDelta({ x: 0, y: 0 })}
+                onClick={() => resetView()}
                 style={{
                     background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: '#ccc',
                     padding: '8px 16px', borderRadius: '100px', fontSize: '0.7rem', cursor: 'pointer',
@@ -100,8 +100,6 @@ const StudioControls: React.FC = () => {
 };
 
 import GestureGuide from './GestureGuide';
-
-// ... (existing code)
 
 const OverlayUI: React.FC = () => {
     const isVerified = useStore(state => state.isVerified);
