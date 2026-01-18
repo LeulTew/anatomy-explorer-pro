@@ -120,17 +120,21 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         const analysis = analyzeBones(nodes, modelName);
         useStore.getState().setBoneAnalysis(analysis);
 
-        // Find bones
-        hipsRef.current = findBone(['hips', 'pelvis', 'root']);
-        chestRef.current = findBone(['chest', 'spine2', 'upperchest', 'sternum']);
+        // Find bones - Updated patterns to match actual bone names
+        hipsRef.current = findBone(['hips', 'hip', 'pelvis']);
+        chestRef.current = findBone(['spine2', 'spine02', 'chest', 'upperchest', 'sternum']);
 
-        breastLRef.current = findBone(['breast_l', 'breastl', 'boob_l', 'boobl', 'pectoral_l']);
-        breastRRef.current = findBone(['breast_r', 'breastr', 'boob_r', 'boobr', 'pectoral_r']);
+        // Breast bones - CC_Base uses L_Breast, Mixamo uses Breast_L
+        breastLRef.current = findBone(['l_breast', 'breast_l', 'breastl', 'boob_l', 'pectoral_l', 'leftbreast']);
+        breastRRef.current = findBone(['r_breast', 'breast_r', 'breastr', 'boob_r', 'pectoral_r', 'rightbreast']);
 
-        buttLRef.current = findBone(['butt_l', 'buttl', 'glute_l', 'glutel']);
-        buttRRef.current = findBone(['butt_r', 'buttr', 'glute_r', 'gluter']);
-        upperLegLRef.current = findBone(['leftupleg', 'upperleg_l', 'thigh_l', 'leg_l'], ['lower']);
-        upperLegRRef.current = findBone(['rightupleg', 'upperleg_r', 'thigh_r', 'leg_r'], ['lower']);
+        // Butt/Glute bones - rare in standard rigs
+        buttLRef.current = findBone(['butt_l', 'buttl', 'glute_l', 'glutel', 'l_butt', 'l_glute']);
+        buttRRef.current = findBone(['butt_r', 'buttr', 'glute_r', 'gluter', 'r_butt', 'r_glute']);
+
+        // Upper leg fallback - CC_Base uses L_Thigh, Mixamo uses LeftUpLeg
+        upperLegLRef.current = findBone(['l_thigh', 'leftupleg', 'thigh_l', 'upperleg_l', 'left_thigh'], ['twist', 'lower']);
+        upperLegRRef.current = findBone(['r_thigh', 'rightupleg', 'thigh_r', 'upperleg_r', 'right_thigh'], ['twist', 'lower']);
 
         // Store initial rotations
         [hipsRef, chestRef, breastLRef, breastRRef, buttLRef, buttRRef, upperLegLRef, upperLegRRef].forEach(ref => {
@@ -225,22 +229,27 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         }
 
         // === BACK VIEW: PER-SIDE GLUTE MOVEMENT ===
-        // Left hand = left side, Right hand = right side
+        // When facing BACK: viewer's left hand = model's RIGHT side (mirrored)
+        // So: left hand gesture should control RIGHT leg/butt
         const isLeftInteracting = isBackView && gesture === 'INTERACT_LEFT';
         const isRightInteracting = isBackView && gesture === 'INTERACT_RIGHT';
 
+        // For back view: SWAP sides - left hand gesture → model's RIGHT side
+        // Because when facing away, model's right is on viewer's LEFT
         if (isLeftInteracting) {
+            // Left hand controls RIGHT side spring
             const force = Math.abs(leftChestOffset.y) * 25.0 * physicsMultiplier + leftChestOffset.x * 20.0 * physicsMultiplier;
-            leftHipSpring.current.target = force;
+            rightHipSpring.current.target = force; // SWAPPED
         } else {
-            leftHipSpring.current.target = Math.sin(time * 2) * 0.01 * physicsMultiplier;
+            rightHipSpring.current.target = Math.sin(time * 2 + 0.2) * 0.01 * physicsMultiplier;
         }
 
         if (isRightInteracting) {
+            // Right hand controls LEFT side spring
             const force = Math.abs(rightChestOffset.y) * 25.0 * physicsMultiplier + rightChestOffset.x * 20.0 * physicsMultiplier;
-            rightHipSpring.current.target = force;
+            leftHipSpring.current.target = force; // SWAPPED
         } else {
-            rightHipSpring.current.target = Math.sin(time * 2 + 0.2) * 0.01 * physicsMultiplier;
+            leftHipSpring.current.target = Math.sin(time * 2) * 0.01 * physicsMultiplier;
         }
 
         const leftHipValue = leftHipSpring.current.update(deltaTime);
@@ -250,12 +259,12 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
         if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
             const base = initialRotations.current[hipsRef.current.uuid];
             if (isLeftInteracting) {
-                // Tilt to left side
-                hipsRef.current.rotation.z = base.z + leftChestOffset.x * 0.6;
+                // Left hand → tilt model's RIGHT side (viewer's left)
+                hipsRef.current.rotation.z = base.z - leftChestOffset.x * 0.6; // Negative for right side
                 hipsRef.current.rotation.x = base.x + leftChestOffset.y * 0.4;
             } else if (isRightInteracting) {
-                // Tilt to right side
-                hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6;
+                // Right hand → tilt model's LEFT side (viewer's right)
+                hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6; // Positive for left side
                 hipsRef.current.rotation.x = base.x + rightChestOffset.y * 0.4;
             } else {
                 hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
@@ -263,39 +272,39 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             }
         }
 
-        // Left butt/glute bone - only moves with LEFT hand
+        // Model's LEFT butt/leg - controlled by RIGHT hand (SWAPPED)
         if (buttLRef.current && initialRotations.current[buttLRef.current.uuid]) {
             const base = initialRotations.current[buttLRef.current.uuid];
-            if (isLeftInteracting) {
-                buttLRef.current.rotation.x = base.x + leftHipValue * 0.5 + leftChestOffset.y * 1.5;
+            if (isRightInteracting) {
+                buttLRef.current.rotation.x = base.x + leftHipValue * 0.5 + rightChestOffset.y * 1.5;
             } else {
                 buttLRef.current.rotation.x = THREE.MathUtils.lerp(buttLRef.current.rotation.x, base.x, 0.1);
             }
         }
 
-        // Right butt/glute bone - only moves with RIGHT hand
+        // Model's RIGHT butt/leg - controlled by LEFT hand (SWAPPED)
         if (buttRRef.current && initialRotations.current[buttRRef.current.uuid]) {
             const base = initialRotations.current[buttRRef.current.uuid];
-            if (isRightInteracting) {
-                buttRRef.current.rotation.x = base.x + rightHipValue * 0.5 + rightChestOffset.y * 1.5;
+            if (isLeftInteracting) {
+                buttRRef.current.rotation.x = base.x + rightHipValue * 0.5 + leftChestOffset.y * 1.5;
             } else {
                 buttRRef.current.rotation.x = THREE.MathUtils.lerp(buttRRef.current.rotation.x, base.x, 0.1);
             }
         }
 
-        // Upper leg fallback - LEFT side only for left hand
-        if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isLeftInteracting) {
+        // Upper leg fallback - Model's LEFT leg - controlled by RIGHT hand (SWAPPED)
+        if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isRightInteracting) {
             const base = initialRotations.current[upperLegLRef.current.uuid];
-            upperLegLRef.current.rotation.z = base.z + leftHipValue * 0.2 + leftChestOffset.y * 0.3;
+            upperLegLRef.current.rotation.z = base.z + leftHipValue * 0.2 + rightChestOffset.y * 0.3;
         } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
             const base = initialRotations.current[upperLegLRef.current.uuid];
             upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
         }
 
-        // Upper leg fallback - RIGHT side only for right hand
-        if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isRightInteracting) {
+        // Upper leg fallback - Model's RIGHT leg - controlled by LEFT hand (SWAPPED)
+        if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isLeftInteracting) {
             const base = initialRotations.current[upperLegRRef.current.uuid];
-            upperLegRRef.current.rotation.z = base.z + rightHipValue * 0.2 + rightChestOffset.y * 0.3;
+            upperLegRRef.current.rotation.z = base.z + rightHipValue * 0.2 + leftChestOffset.y * 0.3;
         } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
             const base = initialRotations.current[upperLegRRef.current.uuid];
             upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
