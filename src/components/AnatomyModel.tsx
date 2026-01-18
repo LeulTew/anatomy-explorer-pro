@@ -29,7 +29,7 @@ export const AVAILABLE_MODELS = [
     },
     {
         id: 'michelle',
-        name: 'Michelle (Standard)',
+        name: 'Michelle',
         path: '/models/michelle.glb',
         config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
@@ -38,20 +38,20 @@ export const AVAILABLE_MODELS = [
         name: 'Seraphina',
         path: '/models/seraphina.glb',
         // Scaled down drastically as requested
-        config: { position: [0, -1.0, 0], scale: 0.015, rotation: [0, 0, 0] }
+        config: { position: [0, -1.3, 0], scale: 0.015, rotation: [0, 0, 0] }
     },
     {
         id: 'isabella',
         name: 'Isabella',
         path: '/models/isabella.glb',
         // Flipped X axis to fix upside-down, scaled up
-        config: { position: [0, -2.0, 0], scale: 2.5, rotation: [Math.PI, 0, 0] }
+        config: { position: [0, -2.2, 0], scale: 2.5, rotation: [Math.PI, 0, 0] }
     },
     {
         id: 'amara',
         name: 'Amara',
         path: '/models/amara.glb',
-        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
+        config: { position: [0, -2.0, 0], scale: 1.0, rotation: [0, 0, 0] }
     },
 ];
 
@@ -225,9 +225,9 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
 
             // Per-side control
             if (gesture === 'INTERACT_LEFT') {
-                rightChestForce *= 0.3; // Reduce opposite side
+                rightChestForce *= 0.0; // STRICT ISOLATION: 0 crosstalk
             } else {
-                leftChestForce *= 0.3;
+                leftChestForce *= 0.0;
             }
 
             leftChestSpring.current.target = leftChestForce;
@@ -303,41 +303,53 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
             if (isLeftInteracting) {
                 // Left hand → tilt model's RIGHT side (viewer's left)
                 // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
-                const mult = (!buttLRef.current) ? 1.5 : 1.0;
-                hipsRef.current.rotation.z = base.z - leftChestOffset.x * 0.6 * mult; // Negative for right side
-                hipsRef.current.rotation.x = base.x + leftChestOffset.y * 0.4 * mult;
+                const mult = (!buttLRef.current) ? 2.5 : 1.0; // Strong multiplication for visibility
+                const tiltZ = -leftChestOffset.x * 0.8 * mult;
+                const tiltX = leftChestOffset.y * 0.5 * mult;
+
+                hipsRef.current.rotation.z = base.z + tiltZ;
+                hipsRef.current.rotation.x = base.x + tiltX;
 
                 // COUNTER-ROTATION: Isolate movement by rotating chest and legs opposite direction
                 if (!buttLRef.current) {
                     if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
                         const cBase = initialRotations.current[chestRef.current.uuid];
-                        chestRef.current.rotation.z = cBase.z + leftChestOffset.x * 0.5 * mult; // Counter
-                        chestRef.current.rotation.x = cBase.x - leftChestOffset.y * 0.3 * mult; // Counter
+                        chestRef.current.rotation.z = cBase.z - tiltZ; // Counter logic
+                        chestRef.current.rotation.x = cBase.x - tiltX;
                     }
-                    // Keep leg mostly still (counter the hip tilt)
                     if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
                         const lBase = initialRotations.current[upperLegLRef.current.uuid];
-                        upperLegLRef.current.rotation.z = lBase.z + leftChestOffset.x * 0.4 * mult;
+                        upperLegLRef.current.rotation.z = lBase.z - tiltZ; // Legs opposite to Hips to stay vertical
+                    }
+                    if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+                        const rBase = initialRotations.current[upperLegRRef.current.uuid];
+                        // Stabilize both legs
+                        upperLegRRef.current.rotation.z = rBase.z - tiltZ;
                     }
                 }
             } else if (isRightInteracting) {
                 // Right hand → tilt model's LEFT side (viewer's right)
-                // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
-                const mult = (!buttRRef.current) ? 1.5 : 1.0;
-                hipsRef.current.rotation.z = base.z + rightChestOffset.x * 0.6 * mult; // Positive for left side
-                hipsRef.current.rotation.x = base.x + rightChestOffset.y * 0.4 * mult;
+                const mult = (!buttRRef.current) ? 2.5 : 1.0;
+                const tiltZ = rightChestOffset.x * 0.8 * mult;
+                const tiltX = rightChestOffset.y * 0.5 * mult;
+
+                hipsRef.current.rotation.z = base.z + tiltZ;
+                hipsRef.current.rotation.x = base.x + tiltX;
 
                 // COUNTER-ROTATION
                 if (!buttRRef.current) {
                     if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
                         const cBase = initialRotations.current[chestRef.current.uuid];
-                        chestRef.current.rotation.z = cBase.z - rightChestOffset.x * 0.5 * mult; // Counter
-                        chestRef.current.rotation.x = cBase.x - rightChestOffset.y * 0.3 * mult; // Counter
+                        chestRef.current.rotation.z = cBase.z - tiltZ;
+                        chestRef.current.rotation.x = cBase.x - tiltX;
                     }
-                    // Keep leg mostly still
                     if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-                        const lBase = initialRotations.current[upperLegRRef.current.uuid];
-                        upperLegRRef.current.rotation.z = lBase.z - rightChestOffset.x * 0.4 * mult;
+                        const rBase = initialRotations.current[upperLegRRef.current.uuid];
+                        upperLegRRef.current.rotation.z = rBase.z - tiltZ;
+                    }
+                    if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+                        const lBase = initialRotations.current[upperLegLRef.current.uuid];
+                        upperLegLRef.current.rotation.z = lBase.z - tiltZ;
                     }
                 }
             } else {
