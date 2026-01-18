@@ -7,13 +7,46 @@ import { SkeletonUtils } from 'three-stdlib';
 import { SpringSolver } from '../logic/SpringSolver';
 
 // Available models
+// Available models configuration
 export const AVAILABLE_MODELS = [
-    { id: 'jeny', name: 'Jeny T-Pose', path: '/models/jeny_tpose_riged.glb' },
-    { id: 'christmas', name: 'Christmas Girl', path: '/models/christmas_girl.glb' },
-    { id: 'base_mesh', name: 'Base Mesh Female', path: '/models/base_mesh_female_with_rig_and_textures.glb' },
-    { id: 'michelle', name: 'Michelle (Standard)', path: '/models/michelle.glb' },
-    { id: 'seraphina', name: 'Seraphina', path: '/models/seraphina.glb' },
-    { id: 'isabella', name: 'Isabella', path: '/models/isabella.glb' },
+    {
+        id: 'jeny',
+        name: 'Jeny T-Pose',
+        path: '/models/jeny_tpose_riged.glb',
+        config: { position: [0, -1.0, 0], scale: 1.0, rotation: [0, 0, 0] }
+    },
+    {
+        id: 'christmas',
+        name: 'Christmas Girl',
+        path: '/models/christmas_girl.glb',
+        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
+    },
+    {
+        id: 'base_mesh',
+        name: 'Base Mesh Female',
+        path: '/models/base_mesh_female_with_rig_and_textures.glb',
+        config: { position: [0, -2.5, 0], scale: 1.0, rotation: [0, 0, 0] }
+    },
+    {
+        id: 'michelle',
+        name: 'Michelle (Standard)',
+        path: '/models/michelle.glb',
+        config: { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] }
+    },
+    {
+        id: 'seraphina',
+        name: 'Seraphina',
+        path: '/models/seraphina.glb',
+        // Scaled down drastically as requested
+        config: { position: [0, -1.0, 0], scale: 0.015, rotation: [0, 0, 0] }
+    },
+    {
+        id: 'isabella',
+        name: 'Isabella',
+        path: '/models/isabella.glb',
+        // Flipped X axis to fix upside-down, scaled up
+        config: { position: [0, -2.0, 0], scale: 2.5, rotation: [Math.PI, 0, 0] }
+    },
 ];
 
 // Bone analysis result type
@@ -366,6 +399,10 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
     const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
     const { nodes } = useGraph(clone);
 
+    // Get model config
+    const modelConfig = AVAILABLE_MODELS.find(m => m.id === modelId)?.config || { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] };
+
+    // Apply base rotation logic or other traverse logic
     useEffect(() => {
         clone.traverse((child) => {
             if (child instanceof THREE.Mesh) {
@@ -377,7 +414,12 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
                 }
             }
         });
-    }, [clone]);
+
+        if (groupRef.current) {
+            // Reset rotation to ensure clean slate if switching models
+            groupRef.current.rotation.set(0, 0, 0);
+        }
+    }, [clone, modelId]);
 
     // Rotate entire model
     useFrame(() => {
@@ -385,27 +427,28 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
 
         const { accumulatedRotation, zoomFactor } = useStore.getState();
 
-        const targetY = -accumulatedRotation.x * 3.0;
-        const targetX = accumulatedRotation.y * 0.5;
+        const targetY = -accumulatedRotation.x * 3.0; // User control Y
+        const targetX = accumulatedRotation.y * 0.5; // User control X
 
-        groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetY, 0.15);
-        groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, targetX, 0.15);
+        // Apply config rotation + user rotation
+        const baseX = modelConfig.rotation ? modelConfig.rotation[0] : 0;
+        const baseY = modelConfig.rotation ? modelConfig.rotation[1] : 0;
+        const baseZ = modelConfig.rotation ? modelConfig.rotation[2] : 0;
 
-        const targetScale = 1.5 * zoomFactor;
+        groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetY + baseY, 0.15);
+        groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, targetX + baseX, 0.15);
+        groupRef.current.rotation.z = baseZ;
+
+        // Apply config scale + zoom
+        const baseScale = (modelConfig.scale || 1.0) * 1.5; // Maintain 1.5 global multiplier
+        const targetScale = baseScale * zoomFactor;
         groupRef.current.scale.setScalar(THREE.MathUtils.lerp(groupRef.current.scale.x, targetScale, 0.1));
     });
 
-    // Lower specific models to center hips at (0,0,0)
-    // Jeny is perfect at -1.0. 
-    // Base Mesh needs drastic lowering (-2.5).
-    // Others (Michelle, Seraphina, Isabella) usually need -1.6.
-    let yOffset = -1.6; // Default for most models
-    if (modelId === 'jeny') yOffset = -1.0;
-    else if (modelId === 'base_mesh') yOffset = -2.5;
-
+    const pos = modelConfig.position || [0, -1.6, 0];
 
     return (
-        <group ref={groupRef} dispose={null} position={[0, yOffset, 0]}>
+        <group ref={groupRef} dispose={null} position={[pos[0], pos[1], pos[2]]}>
             <primitive object={clone} />
             <RigController nodes={nodes} modelName={modelName} modelId={modelId} />
         </group>
