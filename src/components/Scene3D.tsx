@@ -16,6 +16,8 @@ import { BlendFunction } from 'postprocessing';
 import { Stars, Environment, ContactShadows, Float } from '@react-three/drei';
 
 const Scene3D: React.FC = () => {
+    const selectedModel = useStore(state => state.selectedModel);
+
     return (
         <div style={{ width: '100vw', height: '100vh', background: 'radial-gradient(circle at center, #111111 0%, #000000 100%)' }}>
             <Canvas dpr={[1, 2]} gl={{ antialias: true }}>
@@ -42,7 +44,7 @@ const Scene3D: React.FC = () => {
 
                 <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
                     <React.Suspense fallback={null}>
-                        <AnatomyModel />
+                        <AnatomyModel selectedModel={selectedModel} />
                     </React.Suspense>
                 </Float>
 

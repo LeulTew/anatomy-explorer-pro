@@ -53,6 +53,10 @@ interface AppState {
     setCameraActive: (active: boolean) => void;
     setModelLoaded: (loaded: boolean) => void;
 
+    // Model selection
+    selectedModel: string;
+    setSelectedModel: (modelId: string) => void;
+
     resetView: () => void; // Resets accumulated rotation to zero
 }
 
@@ -94,6 +98,10 @@ export const useStore = create<AppState>((set) => ({
 
     setCameraActive: (isCameraActive) => set({ isCameraActive }),
     setModelLoaded: (isModelLoaded) => set({ isModelLoaded }),
+
+    // Model selection
+    selectedModel: 'jeny',
+    setSelectedModel: (selectedModel) => set({ selectedModel }),
 
     resetView: () => set({ accumulatedRotation: { x: 0, y: 0 }, zoomFactor: 1 }),
 }));

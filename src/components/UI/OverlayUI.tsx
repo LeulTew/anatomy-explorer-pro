@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../../store/useStore';
-
+import { AVAILABLE_MODELS } from '../AnatomyModel';
+import GestureGuide from './GestureGuide';
 
 // --- Components ---
 
@@ -46,6 +47,45 @@ const SubscriptionOverlay: React.FC = () => {
     );
 };
 
+const ModelSelector: React.FC = () => {
+    const selectedModel = useStore(state => state.selectedModel);
+    const setSelectedModel = useStore(state => state.setSelectedModel);
+
+    return (
+        <div style={{
+            display: 'flex', alignItems: 'center', gap: 10
+        }}>
+            <span style={{
+                fontSize: '0.65rem', color: '#888', letterSpacing: '1.5px', fontWeight: 600,
+                textTransform: 'uppercase'
+            }}>
+                Model
+            </span>
+            <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                style={{
+                    background: 'rgba(0,0,0,0.6)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.7rem',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    minWidth: 120
+                }}
+            >
+                {AVAILABLE_MODELS.map(model => (
+                    <option key={model.id} value={model.id} style={{ background: '#111' }}>
+                        {model.name}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+};
+
 const StudioControls: React.FC = () => {
     const movementIntensity = useStore(state => state.movementIntensity);
     const setMovementIntensity = useStore(state => state.setMovementIntensity);
@@ -54,12 +94,19 @@ const StudioControls: React.FC = () => {
     return (
         <div className="glass-dark animate-slide-up studio-controls" style={{
             position: 'absolute', bottom: 30, left: '50%', transform: 'translateX(-50%)',
-            padding: '12px 25px', borderRadius: '100px', display: 'flex', gap: 25, alignItems: 'center',
+            padding: '12px 25px', borderRadius: '100px', display: 'flex', gap: 20, alignItems: 'center',
             zIndex: 100, border: '1px solid rgba(255,255,255,0.1)',
             boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
             background: 'rgba(10,10,10,0.85)', backdropFilter: 'blur(12px)',
-            maxWidth: 'calc(100vw - 40px)'
+            maxWidth: 'calc(100vw - 40px)',
+            flexWrap: 'wrap',
+            justifyContent: 'center'
         }}>
+
+            {/* Model Selector */}
+            <ModelSelector />
+
+            <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.1)' }} />
 
             {/* Physics Intensity Control */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -99,8 +146,6 @@ const StudioControls: React.FC = () => {
         </div>
     );
 };
-
-import GestureGuide from './GestureGuide';
 
 const OverlayUI: React.FC = () => {
     const isVerified = useStore(state => state.isVerified);
