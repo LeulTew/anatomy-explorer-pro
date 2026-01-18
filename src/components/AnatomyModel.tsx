@@ -6,7 +6,6 @@ import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
 import { SpringSolver } from '../logic/SpringSolver';
 
-// Available models
 // Available models configuration
 export interface ModelConfig {
     position?: [number, number, number];
@@ -77,6 +76,12 @@ export const AVAILABLE_MODELS: ModelEntry[] = [
         path: '/models/amara.glb',
         config: { position: [0, -3.2, 0], scale: 1.0, rotation: [0, 0, 0], color: '#eec1ad', armDangle: { axis: 'y', invert: false } }
     },
+    {
+        id: 'jane',
+        name: 'Jane',
+        path: '/models/jane_-_female_rigged_character.glb',
+        config: { position: [0, -1.0, 0], scale: 1.0, rotation: [0, 0, 0], armDangle: { axis: 'z', invert: false } }
+    },
 ];
 
 // Bone analysis result type
@@ -104,7 +109,7 @@ const analyzeBones = (nodes: Record<string, THREE.Object3D>, modelName: string):
         }
     });
 
-    const findBone = (patterns: string[]): boolean => {
+    const findBoneFunc = (patterns: string[]): boolean => {
         return patterns.some(p =>
             boneNames.some(b => b.toLowerCase().includes(p.toLowerCase()))
         );
@@ -112,17 +117,16 @@ const analyzeBones = (nodes: Record<string, THREE.Object3D>, modelName: string):
 
     const analysis: BoneAnalysis = {
         modelName,
-        hasSpine: findBone(['spine', 'torso']),
-        hasHips: findBone(['hips', 'pelvis', 'root']),
-        hasChest: findBone(['chest', 'spine2', 'upperchest']),
-        hasBreastL: findBone(['breast_l', 'breastl', 'boob_l', 'boobl', 'pectoral_l']),
-        hasBreastR: findBone(['breast_r', 'breastr', 'boob_r', 'boobr', 'pectoral_r']),
-        hasButtL: findBone(['butt_l', 'buttl', 'glute_l', 'glutel']),
-        hasButtR: findBone(['butt_r', 'buttr', 'glute_r', 'gluter']),
+        hasSpine: findBoneFunc(['spine', 'torso']),
+        hasHips: findBoneFunc(['hips', 'pelvis', 'root']),
+        hasChest: findBoneFunc(['chest', 'spine2', 'upperchest']),
+        hasBreastL: findBoneFunc(['breast_l', 'breastl', 'boob_l', 'boobl', 'pectoral_l']),
+        hasBreastR: findBoneFunc(['breast_r', 'breastr', 'boob_r', 'boobr', 'pectoral_r']),
+        hasButtL: findBoneFunc(['butt_l', 'buttl', 'glute_l', 'glutel']),
+        hasButtR: findBoneFunc(['butt_r', 'buttr', 'glute_r', 'gluter']),
         allBoneNames: boneNames
     };
 
-    // Clean log - only important bones for jiggle physics (easy to copy-paste)
     console.log(`
 === ${modelName} BONES ===
 Hips: ${boneNames.filter(b => b.toLowerCase().includes('hip') || b.toLowerCase().includes('pelvis')).join(', ') || 'NONE'}
@@ -139,8 +143,6 @@ UpperLeg: ${boneNames.filter(b => b.toLowerCase().includes('upleg') || b.toLower
 
 /**
  * Advanced Rig Controller - View-aware animations
- * Front view: chest movement
- * Back view: glute movement
  */
 const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName: string, modelId: string }> = ({ nodes, modelName, modelId }) => {
     // Core bones
@@ -190,41 +192,25 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
     };
 
     useEffect(() => {
-        // Analyze and save bone structure to store
         const analysis = analyzeBones(nodes, modelName);
         useStore.getState().setBoneAnalysis(analysis);
 
-        // Find bones - Updated patterns to match actual bone names
         hipsRef.current = findBone(['hips', 'hip', 'pelvis']);
         chestRef.current = findBone(['spine2', 'spine02', 'chest', 'upperchest', 'sternum']);
-
-        // Breast bones - CC_Base uses L_Breast, Mixamo uses Breast_L
         breastLRef.current = findBone(['l_breast', 'breast_l', 'breastl', 'boob_l', 'pectoral_l', 'leftbreast']);
         breastRRef.current = findBone(['r_breast', 'breast_r', 'breastr', 'boob_r', 'pectoral_r', 'rightbreast']);
-
-        // Butt/Glute bones - rare in standard rigs
         buttLRef.current = findBone(['butt_l', 'buttl', 'glute_l', 'glutel', 'l_butt', 'l_glute']);
         buttRRef.current = findBone(['butt_r', 'buttr', 'glute_r', 'gluter', 'r_butt', 'r_glute']);
-
-        // Upper leg fallback - CC_Base uses L_Thigh, Mixamo uses LeftUpLeg
         upperLegLRef.current = findBone(['l_thigh', 'leftupleg', 'thigh_l', 'upperleg_l', 'left_thigh'], ['twist', 'lower']);
         upperLegRRef.current = findBone(['r_thigh', 'rightupleg', 'thigh_r', 'upperleg_r', 'right_thigh'], ['twist', 'lower']);
-
-        // Arm bones for A-pose lowering
         armLRef.current = findBone(['l_arm', 'leftarm', 'upperarm_l', 'l_upperarm'], ['lower', 'twist', 'forearm']);
         armRRef.current = findBone(['r_arm', 'rightarm', 'upperarm_r', 'r_upperarm'], ['lower', 'twist', 'forearm']);
         shoulderLRef.current = findBone(['l_shoulder', 'leftshoulder', 'clavicle_l', 'l_clavicle']);
         shoulderRRef.current = findBone(['r_shoulder', 'rightshoulder', 'clavicle_r', 'r_clavicle']);
 
-        // Store initial rotations
         [hipsRef, chestRef, breastLRef, breastRRef, buttLRef, buttRRef, upperLegLRef, upperLegRRef, armLRef, armRRef, shoulderLRef, shoulderRRef].forEach(ref => {
             if (ref.current) {
                 initialRotations.current[ref.current.uuid] = ref.current.rotation.clone();
-
-                // ARM PHYSICS: We will set the rotation dynamically in useFrame
-                // based on initialRotations, so we don't need to bias them here.
-
-                // --- Apply Bone Offsets from Config ---
                 const config = AVAILABLE_MODELS.find(m => m.id === modelId)?.config;
                 if (config?.boneOffsets) {
                     const boneName = ref.current.name.toLowerCase();
@@ -258,337 +244,227 @@ const RigController: React.FC<{ nodes: Record<string, THREE.Object3D>, modelName
 
         const physicsMultiplier = movementIntensity;
 
-        // Determine view direction based on accumulated rotation
-        // Normalize rotation to [-PI, PI] range
+        // Determine view direction
         const normalizedRotation = ((accumulatedRotation.x * 3) % (Math.PI * 2));
         const isFrontView = Math.abs(normalizedRotation) < Math.PI / 2 || Math.abs(normalizedRotation) > Math.PI * 1.5;
         const isBackView = !isFrontView;
 
-        // === BREATHING ANIMATION (always active) ===
-        const breathAmount = physicsMultiplier * 0.02;
-        const breathCycle = Math.sin(time * 1.2) * breathAmount;
-
-        // Get interaction input
         const isInteracting = gesture === 'INTERACT_LEFT' || gesture === 'INTERACT_RIGHT';
+        const isLeftInteracting = isBackView && gesture === 'INTERACT_LEFT';
+        const isRightInteracting = isBackView && gesture === 'INTERACT_RIGHT';
+
         const interactOffset = gesture === 'INTERACT_LEFT' ? leftChestOffset :
             gesture === 'INTERACT_RIGHT' ? rightChestOffset : { x: 0, y: 0 };
 
-        // === FRONT VIEW: CHEST MOVEMENT ===
+        // === BREATHING ===
+        const breathAmount = physicsMultiplier * 0.02;
+        const breathCycle = Math.sin(time * 1.2) * breathAmount;
+
+        // === CHEST / BREAST PHYSICS ===
+        const breastJiggleMag = modelId === 'jane' ? 18.0 : 12.0;
+        let leftChestTarget = Math.sin(time * 0.8) * 0.01 * physicsMultiplier;
+        let rightChestTarget = Math.sin(time * 0.8 + 0.1) * 0.01 * physicsMultiplier;
+
         if (isFrontView && isInteracting) {
-            let leftChestForce = Math.abs(interactOffset.y) * 20.0 * physicsMultiplier;
-            let rightChestForce = Math.abs(interactOffset.y) * 20.0 * physicsMultiplier;
-
-            // Per-side control
             if (gesture === 'INTERACT_LEFT') {
-                rightChestForce *= 0.0; // STRICT ISOLATION: 0 crosstalk
+                leftChestTarget = leftChestOffset.y * breastJiggleMag * physicsMultiplier;
             } else {
-                leftChestForce *= 0.0;
+                rightChestTarget = rightChestOffset.y * breastJiggleMag * physicsMultiplier;
             }
-
-            leftChestSpring.current.target = leftChestForce;
-            rightChestSpring.current.target = rightChestForce;
-        } else {
-            leftChestSpring.current.target = Math.sin(time * 0.8) * 0.01 * physicsMultiplier;
-            rightChestSpring.current.target = Math.sin(time * 0.8 + 0.1) * 0.01 * physicsMultiplier;
         }
+
+        leftChestSpring.current.target = leftChestTarget;
+        rightChestSpring.current.target = rightChestTarget;
 
         const leftChestValue = leftChestSpring.current.update(deltaTime);
         const rightChestValue = rightChestSpring.current.update(deltaTime);
 
-        // === LOOSE ARM PHYSICS ===
-        const armDangleBase = Math.PI / 2.5; // ~72 degrees down
+        // === LOOSE ARMS ===
         const modelConf = AVAILABLE_MODELS.find(m => m.id === modelId)?.config;
         const armConf = modelConf?.armDangle || { axis: 'z', invert: false };
-
+        const armDangleBase = Math.PI / 2.5;
         const armSway = Math.sin(time * 0.8) * 0.08 * movementIntensity;
 
         armLSpring.current.target = armDangleBase + armSway;
         armRSpring.current.target = armDangleBase + armSway;
-
         const armLValue = armLSpring.current.update(deltaTime);
         const armRValue = armRSpring.current.update(deltaTime);
 
-        // Apply RELATIVE based on specific rig axis
         const applyArmRot = (bone: THREE.Bone | null, value: number, isRight: boolean) => {
             if (!bone || !initialRotations.current[bone.uuid]) return;
             const base = initialRotations.current[bone.uuid];
-
-            // Handle inversion logic
             const finalVal = (armConf.invert ? -value : value) * (isRight ? 1 : -1);
-
             if (armConf.axis === 'x') bone.rotation.x = base.x + finalVal;
             else if (armConf.axis === 'y') bone.rotation.y = base.y + finalVal;
             else bone.rotation.z = base.z + finalVal;
         };
-
         applyArmRot(armLRef.current, armLValue, false);
         applyArmRot(armRRef.current, armRValue, true);
 
-        // Add Shoulder Drop for "loose" look
         const drop = 0.15;
         const applyShoulderRot = (bone: THREE.Bone | null, isRight: boolean) => {
             if (!bone || !initialRotations.current[bone.uuid]) return;
             const base = initialRotations.current[bone.uuid];
             const finalVal = (armConf.invert ? -drop : drop) * (isRight ? 1 : -1);
-
             if (armConf.axis === 'x') bone.rotation.x = base.x + finalVal;
             else if (armConf.axis === 'y') bone.rotation.y = base.y + finalVal;
             else bone.rotation.z = base.z + finalVal;
         };
-
         applyShoulderRot(shoulderLRef.current, false);
         applyShoulderRot(shoulderRRef.current, true);
 
-        // Apply to breast bones (or chest as fallback)
+        // === APPLY BREAST ROTATIONS (Directional X/Z) ===
+        const breastSwayMag = modelId === 'jane' ? 6.0 : 4.0;
         if (breastLRef.current && initialRotations.current[breastLRef.current.uuid]) {
             const base = initialRotations.current[breastLRef.current.uuid];
-            let rotation = base.x + (leftChestValue * 0.5);
+            breastLRef.current.rotation.x = base.x + leftChestValue;
             if (isFrontView && gesture === 'INTERACT_LEFT') {
-                // Front view: Left user hand -> Screen Left -> Model Right Breast.
-                // Wait. We previously established Strict Isolation.
-                // If gesture is LEFT, we are acting on Left side of screen (Model Right).
-                // So this block (breastLRef = Model Left) should respond to RIGHT gesture?
-                // Standard Mirror: Raise Left Hand -> Reflection raises Left Hand (Screen Left).
-                // Screen Left is Model's RIGHT.
-
-                // User said: "left hand should only move left and right only right".
-                // Just mapping directly to the gesture name avoids confusion.
-                // If user raises Left hand (INTERACT_LEFT), and wants "Left Breast" to move...
-                // Assuming "Left Breast" means "Breast on Left of Screen" (Model Right).
-
-                // Let's stick to the variables and just INCREASE MAGNITUDE.
-                // "increase surface area vertically" -> Increase X rotation (bounce).
-                rotation += interactOffset.y * 5.0; // Increased from 3.0 to 5.0
+                breastLRef.current.rotation.z = base.z + leftChestOffset.x * breastSwayMag;
+            } else {
+                breastLRef.current.rotation.z = THREE.MathUtils.lerp(breastLRef.current.rotation.z, base.z, 0.1);
             }
-            breastLRef.current.rotation.x = rotation;
-
-            // Add Scale for "surface area" feel?
-            // breastLRef.current.scale.y = 1.0 + Math.abs(interactOffset.y) * 0.5;
         }
-
         if (breastRRef.current && initialRotations.current[breastRRef.current.uuid]) {
             const base = initialRotations.current[breastRRef.current.uuid];
-            let rotation = base.x + (rightChestValue * 0.5);
+            breastRRef.current.rotation.x = base.x + rightChestValue;
             if (isFrontView && gesture === 'INTERACT_RIGHT') {
-                rotation += interactOffset.y * 5.0; // Increased from 3.0 to 5.0
+                breastRRef.current.rotation.z = base.z + rightChestOffset.x * breastSwayMag;
+            } else {
+                breastRRef.current.rotation.z = THREE.MathUtils.lerp(breastRRef.current.rotation.z, base.z, 0.1);
             }
-            breastRRef.current.rotation.x = rotation;
         }
 
-        // Chest breathing fallback
+        // Breathing fallback
         if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
             const base = initialRotations.current[chestRef.current.uuid];
             if (!breastLRef.current && !breastRRef.current && isFrontView && isInteracting) {
-                // No breast bones - use chest (Jeny case)
-                // "Jeny not moving breasts, it is moving her whole upper chest area up and down."
-                // Fix: Reduce range heavily (0.5) to avoid whole-body look.
                 chestRef.current.rotation.x = base.x + interactOffset.y * 0.5;
             } else {
                 chestRef.current.rotation.x = base.x - breathCycle;
             }
         }
 
-        // === BACK VIEW: PER-SIDE GLUTE MOVEMENT ===
-        // When facing BACK: viewer's left hand = model's RIGHT side (mirrored)
-        // So: left hand gesture should control RIGHT leg/butt
-        const isLeftInteracting = isBackView && gesture === 'INTERACT_LEFT';
-        const isRightInteracting = isBackView && gesture === 'INTERACT_RIGHT';
+        // === GLUTE PHYSICS ===
+        const gluteBounceMag = modelId === 'jane' ? 22.0 : 15.0;
+        let leftHipTarget = Math.sin(time * 2) * 0.01 * physicsMultiplier;
+        let rightHipTarget = Math.sin(time * 2 + 0.2) * 0.01 * physicsMultiplier;
+
+        if (isLeftInteracting) rightHipTarget = leftChestOffset.y * gluteBounceMag * physicsMultiplier;
+        if (isRightInteracting) leftHipTarget = rightChestOffset.y * gluteBounceMag * physicsMultiplier;
+
+        leftHipSpring.current.target = leftHipTarget;
+        rightHipSpring.current.target = rightHipTarget;
 
         const leftHipValue = leftHipSpring.current.update(deltaTime);
         const rightHipValue = rightHipSpring.current.update(deltaTime);
 
-        // Because when facing away, model's right is on viewer's LEFT
+        // Hips (Overall Movement)
         if (hipsRef.current && initialRotations.current[hipsRef.current.uuid]) {
-            if (isLeftInteracting) {
-                // Left hand controls RIGHT side spring
-                const force = Math.abs(leftChestOffset.y) * 25.0 * physicsMultiplier + leftChestOffset.x * 20.0 * physicsMultiplier;
-                rightHipSpring.current.target = force; // SWAPPED
-            } else {
-                rightHipSpring.current.target = Math.sin(time * 2 + 0.2) * 0.01 * physicsMultiplier;
-            }
-
-            if (isRightInteracting) {
-                // Right hand controls LEFT side spring
-                const force = Math.abs(rightChestOffset.y) * 25.0 * physicsMultiplier + rightChestOffset.x * 20.0 * physicsMultiplier;
-                leftHipSpring.current.target = force; // SWAPPED
-            } else {
-                leftHipSpring.current.target = Math.sin(time * 2) * 0.01 * physicsMultiplier;
-            }
-
-            // Apply to hip bone for overall movement
             const base = initialRotations.current[hipsRef.current.uuid];
-            if (isLeftInteracting) {
-                // Left hand → tilt model's RIGHT side (viewer's left)
-                // If using fallback (no butt bones), use MORE hip movement to simulate glute movement
-                const mult = (!buttLRef.current) ? 2.5 : 1.0; // Strong multiplication for visibility
-                const tiltZ = -leftChestOffset.x * 0.8 * mult;
-                const tiltX = leftChestOffset.y * 0.5 * mult;
-
-                hipsRef.current.rotation.z = base.z + tiltZ;
-                hipsRef.current.rotation.x = base.x + tiltX;
-
-                // COUNTER-ROTATION: Isolate movement by rotating chest and legs opposite direction
-                if (!buttLRef.current) {
-                    if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
-                        const cBase = initialRotations.current[chestRef.current.uuid];
-                        chestRef.current.rotation.z = cBase.z - tiltZ; // Counter logic
-                        chestRef.current.rotation.x = cBase.x - tiltX;
-                    }
-                    if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
-                        const lBase = initialRotations.current[upperLegLRef.current.uuid];
-                        upperLegLRef.current.rotation.z = lBase.z - tiltZ; // Legs opposite to Hips to stay vertical
-                    }
-                    if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-                        const rBase = initialRotations.current[upperLegRRef.current.uuid];
-                        // Stabilize both legs
-                        upperLegRRef.current.rotation.z = rBase.z - tiltZ;
-                    }
-                }
-            } else if (isRightInteracting) {
-                // Right hand → tilt model's LEFT side (viewer's right)
-                const mult = (!buttRRef.current) ? 2.5 : 1.0;
-                const tiltZ = rightChestOffset.x * 0.8 * mult;
-                const tiltX = rightChestOffset.y * 0.5 * mult;
-
-                hipsRef.current.rotation.z = base.z + tiltZ;
-                hipsRef.current.rotation.x = base.x + tiltX;
-
-                // COUNTER-ROTATION
-                if (!buttRRef.current) {
-                    if (chestRef.current && initialRotations.current[chestRef.current.uuid]) {
-                        const cBase = initialRotations.current[chestRef.current.uuid];
-                        chestRef.current.rotation.z = cBase.z - tiltZ;
-                        chestRef.current.rotation.x = cBase.x - tiltX;
-                    }
-                    if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-                        const rBase = initialRotations.current[upperLegRRef.current.uuid];
-                        upperLegRRef.current.rotation.z = rBase.z - tiltZ;
-                    }
-                    if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
-                        const lBase = initialRotations.current[upperLegLRef.current.uuid];
-                        upperLegLRef.current.rotation.z = lBase.z - tiltZ;
-                    }
-                }
+            if (isLeftInteracting || isRightInteracting) {
+                const off = isLeftInteracting ? leftChestOffset : rightChestOffset;
+                const sign = isLeftInteracting ? -1 : 1;
+                const mult = (!buttLRef.current && modelId !== 'jane') ? 2.5 : 1.2;
+                hipsRef.current.rotation.z = base.z + off.x * 0.8 * mult * sign;
+                hipsRef.current.rotation.x = base.x + off.y * 0.5 * mult;
             } else {
                 hipsRef.current.rotation.z = THREE.MathUtils.lerp(hipsRef.current.rotation.z, base.z, 0.1);
                 hipsRef.current.rotation.x = THREE.MathUtils.lerp(hipsRef.current.rotation.x, base.x, 0.1);
             }
         }
 
-        // Model's LEFT butt/leg - controlled by RIGHT hand (SWAPPED)
+        // Glute Bones
+        const gluteSwayMag = modelId === 'jane' ? 6.0 : 3.0;
         if (buttLRef.current && initialRotations.current[buttLRef.current.uuid]) {
             const base = initialRotations.current[buttLRef.current.uuid];
+            buttLRef.current.rotation.x = base.x + leftHipValue;
             if (isRightInteracting) {
-                buttLRef.current.rotation.x = base.x + leftHipValue * 0.5 + rightChestOffset.y * 1.5;
+                buttLRef.current.rotation.z = base.z + rightChestOffset.x * gluteSwayMag;
             } else {
-                buttLRef.current.rotation.x = THREE.MathUtils.lerp(buttLRef.current.rotation.x, base.x, 0.1);
+                buttLRef.current.rotation.z = THREE.MathUtils.lerp(buttLRef.current.rotation.z, base.z, 0.1);
             }
         }
-
-        // Model's RIGHT butt/leg - controlled by LEFT hand (SWAPPED)
         if (buttRRef.current && initialRotations.current[buttRRef.current.uuid]) {
             const base = initialRotations.current[buttRRef.current.uuid];
+            buttRRef.current.rotation.x = base.x + rightHipValue;
             if (isLeftInteracting) {
-                buttRRef.current.rotation.x = base.x + rightHipValue * 0.5 + leftChestOffset.y * 1.5;
+                buttRRef.current.rotation.z = base.z + leftChestOffset.x * gluteSwayMag;
             } else {
-                buttRRef.current.rotation.x = THREE.MathUtils.lerp(buttRRef.current.rotation.x, base.x, 0.1);
+                buttRRef.current.rotation.z = THREE.MathUtils.lerp(buttRRef.current.rotation.z, base.z, 0.1);
             }
         }
 
-        // Upper leg fallback - Model's LEFT leg - controlled by RIGHT hand (SWAPPED)
-        if (!buttLRef.current && upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isRightInteracting) {
-            const base = initialRotations.current[upperLegLRef.current.uuid];
-            // REDUCED LEG SWING - User feedback: "legs moving not ass"
-            // We use minimal leg swing and rely on the enhanced hip movement above
-            upperLegLRef.current.rotation.z = base.z + (leftHipValue * 0.05) + (rightChestOffset.y * 0.08);
-            // Add slight twist for better look?
-            upperLegLRef.current.rotation.y = base.y - rightChestOffset.x * 0.1;
-        } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
-            const base = initialRotations.current[upperLegLRef.current.uuid];
-            upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
-        }
+        // Leg Fallback
+        const hasButtBones = (buttLRef.current || buttRRef.current);
+        const useLegFallback = !hasButtBones && modelId !== 'jane';
 
-        // Upper leg fallback - Model's RIGHT leg - controlled by LEFT hand (SWAPPED)
-        if (!buttRRef.current && upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isLeftInteracting) {
-            const base = initialRotations.current[upperLegRRef.current.uuid];
-            // REDUCED LEG SWING - User feedback: "legs moving not ass"
-            // We use minimal leg swing and rely on the enhanced hip movement above
-            upperLegRRef.current.rotation.z = base.z + (rightHipValue * 0.05) + (leftChestOffset.y * 0.08);
-            // Add slight twist for better look?
-            upperLegRRef.current.rotation.y = base.y + leftChestOffset.x * 0.1;
-        } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
-            const base = initialRotations.current[upperLegRRef.current.uuid];
-            upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
+        if (useLegFallback) {
+            if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid] && isRightInteracting) {
+                const base = initialRotations.current[upperLegLRef.current.uuid];
+                upperLegLRef.current.rotation.z = base.z + (leftHipValue * 0.05) + (rightChestOffset.y * 0.08);
+                upperLegLRef.current.rotation.y = base.y - rightChestOffset.x * 0.1;
+            } else if (upperLegLRef.current && initialRotations.current[upperLegLRef.current.uuid]) {
+                const base = initialRotations.current[upperLegLRef.current.uuid];
+                upperLegLRef.current.rotation.z = THREE.MathUtils.lerp(upperLegLRef.current.rotation.z, base.z, 0.1);
+            }
+
+            if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid] && isLeftInteracting) {
+                const base = initialRotations.current[upperLegRRef.current.uuid];
+                upperLegRRef.current.rotation.z = base.z + (rightHipValue * 0.05) + (leftChestOffset.y * 0.08);
+                upperLegRRef.current.rotation.y = base.y + leftChestOffset.x * 0.1;
+            } else if (upperLegRRef.current && initialRotations.current[upperLegRRef.current.uuid]) {
+                const base = initialRotations.current[upperLegRRef.current.uuid];
+                upperLegRRef.current.rotation.z = THREE.MathUtils.lerp(upperLegRRef.current.rotation.z, base.z, 0.1);
+            }
         }
     });
 
     return <group>{/* RigController */}</group>;
 };
 
-/**
- * Model Loader Component with lazy loading
- */
 const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: string }> = ({ modelPath, modelName, modelId }) => {
     const groupRef = useRef<THREE.Group>(null);
     const { scene } = useGLTF(modelPath);
     const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene]);
     const { nodes } = useGraph(clone);
 
-    // Get model config
     const modelConfig = AVAILABLE_MODELS.find(m => m.id === modelId)?.config || { position: [0, -1.6, 0], scale: 1.0, rotation: [0, 0, 0] };
 
-    // Apply base rotation logic or other traverse logic
     useEffect(() => {
         clone.traverse((child) => {
             if (child instanceof THREE.Mesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
-
-                // Texture fix: Use config color if provided, otherwise force white to show embedded textures
                 if (child.material) {
                     const mat = child.material as THREE.MeshStandardMaterial;
                     if (modelConfig.color) {
                         mat.color.set(modelConfig.color);
                     } else if (mat.color) {
-                        mat.color.set(0xffffff); // Ensure base color is white (un-tinted)
+                        mat.color.set(0xffffff);
                     }
-                    mat.metalness = 0; // Disable metalness to prevent dark/shiny washout
-                    mat.roughness = 0.55; // Natural skin roughness
+                    mat.metalness = 0;
+                    mat.roughness = 0.55;
                     mat.envMapIntensity = 0.5;
                     mat.needsUpdate = true;
                 }
             }
         });
-
-        if (groupRef.current) {
-            // Reset rotation to ensure clean slate if switching models
-            groupRef.current.rotation.set(0, 0, 0);
-        }
+        if (groupRef.current) groupRef.current.rotation.set(0, 0, 0);
     }, [clone, modelId]);
 
-    // Rotate entire model
     useFrame(() => {
         if (!groupRef.current) return;
-
         const { accumulatedRotation, zoomFactor } = useStore.getState();
-
-        const targetY = -accumulatedRotation.x * 3.0; // User control Y
-        const targetX = accumulatedRotation.y * 0.5; // User control X
-
-        // Apply config rotation + user rotation
+        const targetY = -accumulatedRotation.x * 3.0;
+        const targetX = accumulatedRotation.y * 0.5;
         const baseX = modelConfig.rotation ? modelConfig.rotation[0] : 0;
         const baseY = modelConfig.rotation ? modelConfig.rotation[1] : 0;
         const baseZ = modelConfig.rotation ? modelConfig.rotation[2] : 0;
-
-        // Fix Isabella rotation direction (flipped mesh axes)
         const rotMultiplier = modelConfig.invertRotation ? -1.0 : 1.0;
-
         groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, (targetY * rotMultiplier) + baseY, 0.15);
         groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, targetX + baseX, 0.15);
         groupRef.current.rotation.z = baseZ;
-
-        // Apply config scale + zoom
-        const baseScale = (modelConfig.scale || 1.0) * 1.5; // Maintain 1.5 global multiplier
+        const baseScale = (modelConfig.scale || 1.0) * 1.5;
         const targetScale = baseScale * zoomFactor;
         groupRef.current.scale.setScalar(THREE.MathUtils.lerp(groupRef.current.scale.x, targetScale, 0.1));
     });
@@ -603,12 +479,8 @@ const ModelLoader: React.FC<{ modelPath: string, modelName: string, modelId: str
     );
 };
 
-/**
- * Main Model Component with model selection
- */
 const AnatomyModel: React.FC<{ selectedModel?: string }> = ({ selectedModel = 'jeny' }) => {
     const model = AVAILABLE_MODELS.find(m => m.id === selectedModel) || AVAILABLE_MODELS[0];
-
     return (
         <Suspense fallback={null}>
             <ModelLoader modelPath={model.path} modelName={model.name} modelId={model.id} />
@@ -616,7 +488,5 @@ const AnatomyModel: React.FC<{ selectedModel?: string }> = ({ selectedModel = 'j
     );
 };
 
-// Preload default model
 useGLTF.preload(AVAILABLE_MODELS[0].path);
-
 export default AnatomyModel;
